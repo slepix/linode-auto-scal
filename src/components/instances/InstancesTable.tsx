@@ -22,6 +22,7 @@ import Alert from '@mui/material/Alert';
 import Stack from '@mui/material/Stack';
 import LockIcon from '@mui/icons-material/Lock';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import KeyIcon from '@mui/icons-material/Key';
 import InputIcon from '@mui/icons-material/Input';
 import { api } from '../../api/client';
@@ -45,6 +46,7 @@ export default function InstancesTable({ groupId }: Props) {
   const [importId, setImportId] = useState('');
   const [importLoading, setImportLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Instance | null>(null);
+  const [purgeConfirm, setPurgeConfirm] = useState<Instance | null>(null);
 
   const fetchInstances = () => {
     api.getGroupInstances(groupId).then(setInstances).catch(() => {});
@@ -72,6 +74,17 @@ export default function InstancesTable({ groupId }: Props) {
       await api.forceDeleteInstance(groupId, inst.id);
       setActionMsg({ type: 'success', text: `Instance ${inst.linode_label || inst.id.slice(0, 8)} force-deleted` });
       setDeleteConfirm(null);
+      fetchInstances();
+    } catch (e) {
+      setActionMsg({ type: 'error', text: e instanceof Error ? e.message : 'Failed' });
+    }
+  };
+
+  const handlePurge = async (inst: Instance) => {
+    try {
+      await api.purgeInstance(groupId, inst.id);
+      setActionMsg({ type: 'success', text: `Instance ${inst.linode_label || inst.id.slice(0, 8)} purged from tracking` });
+      setPurgeConfirm(null);
       fetchInstances();
     } catch (e) {
       setActionMsg({ type: 'error', text: e instanceof Error ? e.message : 'Failed' });
@@ -199,6 +212,17 @@ export default function InstancesTable({ groupId }: Props) {
                           <KeyIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
+                      {(inst.status === 'draining' || inst.status === 'deleting') && (
+                        <Tooltip title="Purge from DB">
+                          <IconButton
+                            size="small"
+                            color="warning"
+                            onClick={() => setPurgeConfirm(inst)}
+                          >
+                            <RemoveCircleOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       <Tooltip title="Force delete">
                         <IconButton
                           size="small"
@@ -279,6 +303,24 @@ export default function InstancesTable({ groupId }: Props) {
           <Button onClick={() => setDeleteConfirm(null)}>Cancel</Button>
           <Button color="error" variant="contained" onClick={() => deleteConfirm && handleForceDelete(deleteConfirm)}>
             Force Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Purge Confirmation */}
+      <Dialog open={!!purgeConfirm} onClose={() => setPurgeConfirm(null)} maxWidth="xs">
+        <DialogTitle>Purge Instance from Tracking</DialogTitle>
+        <DialogContent>
+          <Typography>
+            This will remove instance{' '}
+            <strong>{purgeConfirm?.linode_label || purgeConfirm?.id.slice(0, 8)}</strong>{' '}
+            from the database without touching the Linode. You are responsible for manually deleting the VM.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPurgeConfirm(null)}>Cancel</Button>
+          <Button color="warning" variant="contained" onClick={() => purgeConfirm && handlePurge(purgeConfirm)}>
+            Purge
           </Button>
         </DialogActions>
       </Dialog>

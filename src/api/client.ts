@@ -85,6 +85,8 @@ export const api = {
   clearCooldown: (id: string) => request<unknown>('POST', `/v1/groups/${id}/clear-cooldown`),
   forceDeleteInstance: (groupId: string, instanceId: string) =>
     request<unknown>('POST', `/v1/groups/${groupId}/instances/${instanceId}/force-delete`),
+  purgeInstance: (groupId: string, instanceId: string) =>
+    request<unknown>('POST', `/v1/groups/${groupId}/instances/${instanceId}/purge`),
   getRootPassword: (groupId: string, instanceId: string) =>
     request<RootPasswordResponse>('GET', `/v1/groups/${groupId}/instances/${instanceId}/root-password`),
   importInstance: (groupId: string, linodeId: number) =>

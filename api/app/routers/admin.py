@@ -65,6 +65,35 @@ def force_delete_instance(
     return {"message": f"Force delete triggered for instance '{instance_id}'"}
 
 
+@router.post("/{group_id}/instances/{instance_id}/purge")
+def purge_instance(
+    group_id: str,
+    instance_id: str,
+    db: Session = Depends(get_db),
+    _key=Depends(require_permission("force:ops")),
+):
+    instance = db.query(Instance).filter(
+        Instance.id == instance_id,
+        Instance.group_id == group_id,
+        Instance.deleted_at == None,
+    ).first()
+    if not instance:
+        raise HTTPException(status_code=404, detail="Instance not found")
+    event = ScaleEvent(
+        id=uuid.uuid4().hex,
+        group_id=group_id,
+        instance_id=instance_id,
+        event_type="instance_purged",
+        severity="warning",
+        message=f"Instance {instance_id} (linode_id={instance.linode_id}) purged from DB via admin API",
+    )
+    db.add(event)
+    instance.status = "deleted"
+    instance.deleted_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"message": f"Instance '{instance_id}' purged from tracking"}
+
+
 @router.post("/{group_id}/clear-cooldown")
 def clear_cooldown(
     group_id: str,

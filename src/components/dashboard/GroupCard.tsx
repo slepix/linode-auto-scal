@@ -32,7 +32,7 @@ interface Props {
 export default function GroupCard({ group, status, onClick, onEdit, onDelete }: Props) {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
   const active = status?.active_instances ?? 0;
-  const desired = status?.desired_count ?? group.desired_count;
+  const desired = group.desired_count;
   const max = group.max_instances;
   const fillPct = max > 0 ? (active / max) * 100 : 0;
   const hasActivity = status?.creating_instances || status?.draining_instances;

@@ -78,6 +78,11 @@ def group_cooldown(
         ScaleEvent.event_type == "scale_down_completed",
     ).order_by(desc(ScaleEvent.created_at)).first()
 
+    last_cleared = db.query(ScaleEvent).filter(
+        ScaleEvent.group_id == group_id,
+        ScaleEvent.event_type == "cooldown_cleared",
+    ).order_by(desc(ScaleEvent.created_at)).first()
+
     now = datetime.now(timezone.utc)
     up_seconds = cooldown_cfg.get("scale_up_seconds", 300)
     down_seconds = cooldown_cfg.get("scale_down_seconds", 600)
@@ -86,12 +91,18 @@ def group_cooldown(
     down_remaining = 0
 
     if last_scale_up and last_scale_up.created_at:
-        elapsed = (now - last_scale_up.created_at.replace(tzinfo=timezone.utc)).total_seconds()
-        up_remaining = max(0, up_seconds - elapsed)
+        cleared = (last_cleared and last_cleared.created_at and
+                   last_cleared.created_at.replace(tzinfo=timezone.utc) > last_scale_up.created_at.replace(tzinfo=timezone.utc))
+        if not cleared:
+            elapsed = (now - last_scale_up.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+            up_remaining = max(0, up_seconds - elapsed)
 
     if last_scale_down and last_scale_down.created_at:
-        elapsed = (now - last_scale_down.created_at.replace(tzinfo=timezone.utc)).total_seconds()
-        down_remaining = max(0, down_seconds - elapsed)
+        cleared = (last_cleared and last_cleared.created_at and
+                   last_cleared.created_at.replace(tzinfo=timezone.utc) > last_scale_down.created_at.replace(tzinfo=timezone.utc))
+        if not cleared:
+            elapsed = (now - last_scale_down.created_at.replace(tzinfo=timezone.utc)).total_seconds()
+            down_remaining = max(0, down_seconds - elapsed)
 
     return {
         "group_id": group_id,

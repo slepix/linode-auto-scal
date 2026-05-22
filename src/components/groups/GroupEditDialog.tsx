@@ -36,6 +36,10 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
   const [desiredCount, setDesiredCount] = useState(group.desired_count);
   const [maxScaleStep, setMaxScaleStep] = useState(group.max_scale_step);
 
+  // Region & Type
+  const [region, setRegion] = useState(group.region);
+  const [instanceType, setInstanceType] = useState(group.type);
+
   // Image
   const [image, setImage] = useState(group.image);
 
@@ -91,6 +95,8 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
     try {
       const data: GroupUpdate = {
         enabled,
+        region: region !== group.region ? region : undefined,
+        type: instanceType !== group.type ? instanceType : undefined,
         image: image !== group.image ? image : undefined,
         min_instances: minInstances,
         max_instances: maxInstances,
@@ -167,15 +173,31 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
       <DialogContent dividers>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
-          {group.region} · {group.type}
-        </Typography>
-
         <Grid container spacing={2} sx={{ mb: 2 }}>
           <Grid size={{ xs: 12 }}>
             <FormControlLabel
               control={<Switch checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />}
               label="Enabled"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              label="Region"
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              size="small"
+              helperText="Linode region (e.g. eu-central, us-east)"
+            />
+          </Grid>
+          <Grid size={{ xs: 12, sm: 6 }}>
+            <TextField
+              fullWidth
+              label="Instance Type"
+              value={instanceType}
+              onChange={(e) => setInstanceType(e.target.value)}
+              size="small"
+              helperText="Linode plan (e.g. g6-standard-2, g6-nanode-1)"
             />
           </Grid>
           <Grid size={{ xs: 12 }}>

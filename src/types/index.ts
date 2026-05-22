@@ -118,6 +118,8 @@ export interface GroupCreate {
 
 export interface GroupUpdate {
   enabled?: boolean;
+  region?: string;
+  type?: string;
   image?: string;
   min_instances?: number;
   max_instances?: number;

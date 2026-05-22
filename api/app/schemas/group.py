@@ -102,6 +102,8 @@ class GroupCreate(BaseModel):
 
 class GroupUpdate(BaseModel):
     enabled: Optional[bool] = None
+    region: Optional[str] = None
+    type: Optional[str] = None
     image: Optional[str] = None
     min_instances: Optional[int] = None
     max_instances: Optional[int] = None

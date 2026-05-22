@@ -127,7 +127,14 @@ export default function App() {
                 loading={groupsLoading}
                 onGroupClick={setSelectedGroup}
                 onCreateGroup={() => setCreateGroupOpen(true)}
-                onEditGroup={(g) => setEditGroup(g)}
+                onEditGroup={async (g) => {
+                  try {
+                    const fresh = await api.getGroup(g.group_id);
+                    setEditGroup(fresh);
+                  } catch {
+                    setEditGroup(g);
+                  }
+                }}
                 onDeleteGroup={async (id) => {
                   await api.deleteGroup(id);
                   refetchGroups();

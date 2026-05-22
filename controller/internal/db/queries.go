@@ -301,7 +301,10 @@ func InsertScaleRequest(db *sql.DB, r *ScaleRequest) error {
 func HasPendingScaleUp(db *sql.DB, groupID string) (bool, error) {
 	var count int
 	err := db.QueryRow(
-		`SELECT COUNT(*) FROM scale_requests WHERE group_id = $1 AND request_type = 'scale_up' AND status IN ('queued', 'in_progress') AND dry_run = 'false'`,
+		`SELECT COUNT(*) FROM scale_requests WHERE group_id = $1
+		 AND (request_type IN ('scale_up', 'scale', 'set_desired_count'))
+		 AND status IN ('queued', 'running')
+		 AND dry_run = 'false'`,
 		groupID,
 	).Scan(&count)
 	return count > 0, err
@@ -310,7 +313,10 @@ func HasPendingScaleUp(db *sql.DB, groupID string) (bool, error) {
 func HasPendingScaleDown(db *sql.DB, groupID string) (bool, error) {
 	var count int
 	err := db.QueryRow(
-		`SELECT COUNT(*) FROM scale_requests WHERE group_id = $1 AND request_type = 'scale_down' AND status IN ('queued', 'in_progress') AND dry_run = 'false'`,
+		`SELECT COUNT(*) FROM scale_requests WHERE group_id = $1
+		 AND (request_type IN ('scale_down', 'scale', 'set_desired_count'))
+		 AND status IN ('queued', 'running')
+		 AND dry_run = 'false'`,
 		groupID,
 	).Scan(&count)
 	return count > 0, err

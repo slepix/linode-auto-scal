@@ -167,10 +167,16 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 			active, _ := countActiveInstances(db, req.GroupID)
 			creating, _ := countCreatingInstances(db, req.GroupID)
 			inFlight := int(active) + int(creating)
-			canCreate := group.MaxInstances - inFlight
+
+			// Cap at desired_count to prevent over-provisioning
+			cap := group.MaxInstances
+			if group.DesiredCount > 0 && group.DesiredCount < cap {
+				cap = group.DesiredCount
+			}
+			canCreate := cap - inFlight
 			if canCreate <= 0 {
 				if !anySuccess {
-					log.Infow("already at max instances")
+					log.Infow("already at or above target", "in_flight", inFlight, "cap", cap)
 					dbpkg.UpdateScaleRequestStatus(db, req.ID, "blocked_by_max_instances")
 					return
 				}

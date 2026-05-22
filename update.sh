@@ -39,10 +39,36 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api contro
 # ─── Run migrations if any ───────────────────────────────────────────────────
 echo "Checking for new migrations..."
 DB_URL=$(grep '^DATABASE_URL=' .env | cut -d= -f2-)
+
+# Create tracking table if it doesn't exist (app user owns this one)
+psql "$DB_URL" -c "
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  filename VARCHAR(255) PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);" 2>/dev/null
+
+# Seed existing migrations that were applied during initial provisioning
+psql "$DB_URL" -c "
+INSERT INTO schema_migrations (filename)
+SELECT '001_initial_schema.sql'
+WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE filename = '001_initial_schema.sql')
+  AND EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'groups');
+" 2>/dev/null
+
 for migration in api/migrations/*.sql; do
   [ -f "$migration" ] || continue
-  echo "  Applying $migration..."
-  psql "$DB_URL" -f "$migration" 2>&1 || true
+  basename=$(basename "$migration")
+  already=$(psql "$DB_URL" -tAc "SELECT 1 FROM schema_migrations WHERE filename = '$basename'" 2>/dev/null)
+  if [ "$already" = "1" ]; then
+    echo "  Skipping $basename (already applied)"
+    continue
+  fi
+  echo "  Applying $basename..."
+  if psql "$DB_URL" -f "$migration"; then
+    psql "$DB_URL" -c "INSERT INTO schema_migrations (filename) VALUES ('$basename')" 2>/dev/null
+  else
+    echo "  WARNING: $basename had errors"
+  fi
 done
 
 # ─── Health check ────────────────────────────────────────────────────────────

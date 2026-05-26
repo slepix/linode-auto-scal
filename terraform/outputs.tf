@@ -4,13 +4,13 @@ output "autoscaler_ip" {
 }
 
 output "api_url" {
-  description = "API base URL"
-  value       = "http://${tolist(linode_instance.autoscaler.ipv4)[0]}:8000"
+  description = "API base URL (via nginx reverse proxy)"
+  value       = "https://${replace(tolist(linode_instance.autoscaler.ipv4)[0], ".", "-")}.ip.linodeusercontent.com/api"
 }
 
 output "dashboard_url" {
-  description = "Frontend dashboard URL"
-  value       = "http://${tolist(linode_instance.autoscaler.ipv4)[0]}"
+  description = "Frontend dashboard URL (Let's Encrypt HTTPS)"
+  value       = "https://${replace(tolist(linode_instance.autoscaler.ipv4)[0], ".", "-")}.ip.linodeusercontent.com"
 }
 
 output "autoscaler_secret_key" {

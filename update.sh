@@ -39,16 +39,34 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api contro
 # ─── Run migrations if any ───────────────────────────────────────────────────
 echo "Checking for new migrations..."
 DB_URL=$(grep '^DATABASE_URL=' .env | cut -d= -f2-)
+DB_ROOT_URL=$(grep '^DATABASE_ROOT_URL=' .env | cut -d= -f2- || true)
 
-# Create tracking table if it doesn't exist (app user owns this one)
-psql "$DB_URL" -c "
+# Use root URL for migrations (needs ALTER TABLE privileges); fall back to app URL
+MIGRATION_URL="${DB_ROOT_URL:-$DB_URL}"
+
+# Ensure app user owns all tables so future operations work
+if [ -n "$DB_ROOT_URL" ]; then
+  APP_USER=$(echo "$DB_URL" | sed -n 's|postgresql://\([^:]*\):.*|\1|p')
+  if [ -n "$APP_USER" ]; then
+    echo "Ensuring table ownership for $APP_USER..."
+    psql "$DB_ROOT_URL" -c "
+    DO \$\$ DECLARE r RECORD; BEGIN
+      FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO $APP_USER';
+      END LOOP;
+    END \$\$;" 2>/dev/null
+  fi
+fi
+
+# Create tracking table if it doesn't exist
+psql "$MIGRATION_URL" -c "
 CREATE TABLE IF NOT EXISTS schema_migrations (
   filename VARCHAR(255) PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );" 2>/dev/null
 
 # Seed existing migrations that were applied during initial provisioning
-psql "$DB_URL" -c "
+psql "$MIGRATION_URL" -c "
 INSERT INTO schema_migrations (filename)
 SELECT '001_initial_schema.sql'
 WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE filename = '001_initial_schema.sql')
@@ -58,14 +76,14 @@ WHERE NOT EXISTS (SELECT 1 FROM schema_migrations WHERE filename = '001_initial_
 for migration in api/migrations/*.sql; do
   [ -f "$migration" ] || continue
   basename=$(basename "$migration")
-  already=$(psql "$DB_URL" -tAc "SELECT 1 FROM schema_migrations WHERE filename = '$basename'" 2>/dev/null)
+  already=$(psql "$MIGRATION_URL" -tAc "SELECT 1 FROM schema_migrations WHERE filename = '$basename'" 2>/dev/null)
   if [ "$already" = "1" ]; then
     echo "  Skipping $basename (already applied)"
     continue
   fi
   echo "  Applying $basename..."
-  if psql "$DB_URL" -f "$migration"; then
-    psql "$DB_URL" -c "INSERT INTO schema_migrations (filename) VALUES ('$basename')" 2>/dev/null
+  if psql "$MIGRATION_URL" -f "$migration"; then
+    psql "$MIGRATION_URL" -c "INSERT INTO schema_migrations (filename) VALUES ('$basename')" 2>/dev/null
   else
     echo "  WARNING: $basename had errors"
   fi

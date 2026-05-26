@@ -61,6 +61,10 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_app_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_app_user};
 GRANTSQL
 
+# Transfer ownership of all existing tables to the app user so it can ALTER them
+psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" -c \
+  "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO ${db_app_user}'; END LOOP; END \$\$;"
+
 # Run all schema migrations in order
 DB_APP_URL="postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require"
 for migration in $(ls "$REPO_DIR/api/migrations/"*.sql | sort); do
@@ -89,6 +93,7 @@ unset PGPASSWORD
 cat > .env <<ENVEOF
 AUTOSCALER_SECRET_KEY=${autoscaler_secret_key}
 DATABASE_URL=postgresql://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require
+DATABASE_ROOT_URL=postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require
 CONTROLLER_DATABASE_URL=postgres://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require
 VITE_API_URL=http://$${PUBLIC_IP}:8000
 ENVEOF

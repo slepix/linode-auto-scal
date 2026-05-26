@@ -6,7 +6,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 # ─── System packages ──────────────────────────────────────────────────────────
 apt-get update -qq
-apt-get install -y -qq git curl ca-certificates nginx jq postgresql-client
+apt-get install -y -qq git curl ca-certificates nginx jq postgresql-client certbot python3-certbot-nginx
 
 # ─── Node.js (for building the frontend) ─────────────────────────────────────
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
@@ -85,42 +85,53 @@ chmod 600 /root/.autoscaler/admin-api-key
 
 unset PGPASSWORD
 
+# ─── Derive hostname from public IP ──────────────────────────────────────────
+# Linode provides a reverse-DNS hostname like 172-233-52-207.ip.linodeusercontent.com
+HOSTNAME_SLUG=$(echo "$${PUBLIC_IP}" | tr '.' '-')
+SERVER_HOSTNAME="$${HOSTNAME_SLUG}.ip.linodeusercontent.com"
+
 # ─── Write .env ───────────────────────────────────────────────────────────────
 # App containers connect as the limited app user, not root.
 cat > .env <<ENVEOF
 AUTOSCALER_SECRET_KEY=${autoscaler_secret_key}
 DATABASE_URL=postgresql://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require
 CONTROLLER_DATABASE_URL=postgres://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require
-VITE_API_URL=http://$${PUBLIC_IP}:8000
+VITE_API_URL=/api
 ENVEOF
 
 # ─── Build the frontend ───────────────────────────────────────────────────────
 npm ci
-VITE_API_URL="http://$${PUBLIC_IP}:8000" npm run build
+VITE_API_URL="/api" npm run build
 
 # ─── Serve frontend with nginx ────────────────────────────────────────────────
 # Copy build output to nginx webroot
 rm -rf /var/www/html/*
 cp -r dist/* /var/www/html/
 
-# Write nginx site config: serve SPA, proxy /healthz for convenience
-cat > /etc/nginx/sites-available/autoscaler <<'NGINXEOF'
+# Initial HTTP-only config (needed for certbot webroot challenge)
+cat > /etc/nginx/sites-available/autoscaler <<NGINXEOF
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
+    server_name $${SERVER_HOSTNAME};
 
     root /var/www/html;
     index index.html;
 
-    # SPA fallback
-    location / {
-        try_files $uri $uri/ /index.html;
+    location /.well-known/acme-challenge/ {
+        root /var/www/html;
     }
 
-    # Optional: surface API health via nginx
-    location /healthz {
-        proxy_pass http://127.0.0.1:8000/healthz;
-        proxy_set_header Host $host;
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
     }
 }
 NGINXEOF
@@ -130,6 +141,12 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl enable --now nginx
 systemctl reload nginx
+
+# ─── Obtain Let's Encrypt certificate ────────────────────────────────────────
+certbot --nginx -d "$${SERVER_HOSTNAME}" --non-interactive --agree-tos --register-unsafely-without-email --redirect
+
+# certbot --nginx rewrites the config with SSL. Ensure nginx picks it up.
+nginx -t && systemctl reload nginx
 
 # ─── Generate go.sum for controller ──────────────────────────────────────────
 docker run --rm -v "$REPO_DIR/controller":/app -w /app golang:1.22-alpine go mod download

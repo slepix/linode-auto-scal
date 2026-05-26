@@ -61,16 +61,16 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_app_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_app_user};
 GRANTSQL
 
-# Transfer ownership of all existing tables to the app user so it can ALTER them
-psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" -c \
-  "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO ${db_app_user}'; END LOOP; END \$\$;"
-
-# Run all schema migrations in order
+# Run all schema migrations in order (as root, since it creates the tables)
 DB_APP_URL="postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require"
 for migration in $(ls "$REPO_DIR/api/migrations/"*.sql | sort); do
   echo "Applying migration: $migration"
   psql "$${DB_APP_URL}" -f "$migration"
 done
+
+# Transfer ownership of all tables to the app user so it can ALTER them later
+psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" -c \
+  "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO ${db_app_user}'; END LOOP; END \$\$;"
 
 # ─── Bootstrap admin API key ─────────────────────────────────────────────────
 ADMIN_API_KEY="sk-$(openssl rand -hex 32)"

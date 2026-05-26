@@ -12,7 +12,7 @@ import (
 
 	"github.com/linode-instance-autoscaler/controller/internal/config"
 	dbpkg "github.com/linode-instance-autoscaler/controller/internal/db"
-	_ "github.com/linode-instance-autoscaler/controller/internal/metrics"
+	"github.com/linode-instance-autoscaler/controller/internal/metrics"
 	"github.com/linode-instance-autoscaler/controller/internal/reconciler"
 	"github.com/linode-instance-autoscaler/controller/internal/scaler"
 )
@@ -75,6 +75,7 @@ func main() {
 	ticker := time.NewTicker(time.Duration(cfg.PollInterval) * time.Second)
 	defer ticker.Stop()
 	for range ticker.C {
+		metrics.RefreshGauges(db)
 		processScaleRequests(db, s, log, cfg)
 	}
 }

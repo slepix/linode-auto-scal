@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"database/sql"
+
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -44,3 +46,25 @@ var (
 		Buckets: prometheus.DefBuckets,
 	}, []string{"group_id"})
 )
+
+func RefreshGauges(db *sql.DB) {
+	var groups float64
+	if err := db.QueryRow(`SELECT COUNT(*) FROM groups WHERE deleted_at IS NULL`).Scan(&groups); err == nil {
+		GroupsTotal.Set(groups)
+	}
+
+	var total float64
+	if err := db.QueryRow(`SELECT COUNT(*) FROM instances WHERE deleted_at IS NULL`).Scan(&total); err == nil {
+		InstancesTotal.Set(total)
+	}
+
+	var active float64
+	if err := db.QueryRow(`SELECT COUNT(*) FROM instances WHERE status = 'active' AND deleted_at IS NULL`).Scan(&active); err == nil {
+		InstancesActive.Set(active)
+	}
+
+	var drift float64
+	if err := db.QueryRow(`SELECT COUNT(*) FROM drift_records WHERE status = 'open'`).Scan(&drift); err == nil {
+		DriftRecordsTotal.Set(drift)
+	}
+}

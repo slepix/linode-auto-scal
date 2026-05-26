@@ -1,7 +1,11 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, Histogram
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 import time
+
+from ..db.base import get_db
 
 router = APIRouter(tags=["System"])
 
@@ -19,6 +23,21 @@ reconciliation_duration = Histogram("autoscaler_reconciliation_duration_seconds"
 _start_time = time.time()
 
 
+def _refresh_gauges(db: Session) -> None:
+    groups_total.set(
+        db.execute(text("SELECT COUNT(*) FROM groups WHERE deleted_at IS NULL")).scalar() or 0
+    )
+    instances_total.set(
+        db.execute(text("SELECT COUNT(*) FROM instances WHERE deleted_at IS NULL")).scalar() or 0
+    )
+    instances_active.set(
+        db.execute(text("SELECT COUNT(*) FROM instances WHERE status = 'active' AND deleted_at IS NULL")).scalar() or 0
+    )
+    drift_records_total.set(
+        db.execute(text("SELECT COUNT(*) FROM drift_records WHERE status = 'open'")).scalar() or 0
+    )
+
+
 @router.get("/healthz")
 def healthz():
     return {"status": "ok", "uptime_seconds": int(time.time() - _start_time)}
@@ -30,5 +49,6 @@ def readyz():
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
-def metrics():
+def metrics(db: Session = Depends(get_db)):
+    _refresh_gauges(db)
     return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)

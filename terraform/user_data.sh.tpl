@@ -61,9 +61,13 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_app_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_app_user};
 GRANTSQL
 
-# Run the schema migration as the app user (so it owns the tables)
+# Run all schema migrations as the app user (so it owns the tables)
 DB_APP_URL="postgresql://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require"
-psql "$${DB_APP_URL}" -f "$REPO_DIR/api/migrations/001_initial_schema.sql"
+for migration in "$REPO_DIR"/api/migrations/*.sql; do
+  [ -f "$migration" ] || continue
+  echo "Applying $(basename "$migration")..."
+  psql "$${DB_APP_URL}" -f "$migration"
+done
 
 # ─── Bootstrap admin API key ─────────────────────────────────────────────────
 ADMIN_API_KEY="sk-$(openssl rand -hex 32)"

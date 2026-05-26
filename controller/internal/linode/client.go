@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/linode/linodego"
@@ -26,15 +27,21 @@ func NewClient(token, baseURL string, maxRetries int) *Client {
 	oauth2Client.Timeout = 30 * time.Second
 
 	client := linodego.NewClient(oauth2Client)
-	if baseURL != "" {
+	client.SetRetryCount(maxRetries)
+
+	// linodego manages its own base URL (https://api.linode.com/v4beta).
+	// Only override if a non-standard base was provided.
+	rawBaseURL := baseURL
+	if baseURL == "" {
+		rawBaseURL = "https://api.linode.com/v4"
+	} else if !strings.HasSuffix(baseURL, "/v4") {
 		client.SetBaseURL(baseURL)
 	}
-	client.SetRetryCount(maxRetries)
 
 	return &Client{
 		api:        client,
 		token:      token,
-		baseURL:    baseURL,
+		baseURL:    rawBaseURL,
 		httpClient: oauth2Client,
 	}
 }

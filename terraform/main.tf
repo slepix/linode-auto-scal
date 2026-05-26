@@ -108,10 +108,10 @@ resource "linode_firewall" "autoscaler" {
   }
 
   inbound {
-    label    = "allow-api"
+    label    = "allow-https"
     action   = "ACCEPT"
     protocol = "TCP"
-    ports    = "8000"
+    ports    = "443"
     ipv4     = var.allowed_api_ips
   }
 

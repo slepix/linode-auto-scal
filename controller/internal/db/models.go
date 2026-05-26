@@ -26,8 +26,9 @@ type Group struct {
 	AlertingConfigJSON      sql.NullString
 	BootConfigJSON          sql.NullString
 	TagsJSON                sql.NullString
-	NodebalancerConfigJSON  sql.NullString
-	EncryptedLinodeToken    string
+	NodebalancerConfigJSON    sql.NullString
+	MetricScalingConfigJSON   sql.NullString
+	EncryptedLinodeToken      string
 	CreatedAt               time.Time
 	UpdatedAt               time.Time
 	DeletedAt               sql.NullTime

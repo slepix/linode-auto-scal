@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from ..models.group import Group
 from ..models.instance import Instance
-from ..schemas.group import GroupCreate, GroupUpdate, GroupResponse, NetworkConfig, ReadinessConfig, CooldownConfig, ReconciliationConfig, AlertingConfig, NodebalancerConfig, BootConfig
+from ..schemas.group import GroupCreate, GroupUpdate, GroupResponse, NetworkConfig, ReadinessConfig, CooldownConfig, ReconciliationConfig, AlertingConfig, NodebalancerConfig, BootConfig, MetricScalingConfig
 from ..core.crypto import encrypt
 from fastapi import HTTPException
 
@@ -62,6 +62,7 @@ def create_group(db: Session, payload: GroupCreate) -> Group:
         reconciliation_config_json=json.dumps(payload.reconciliation.model_dump()) if payload.reconciliation else None,
         alerting_config_json=alerting_json,
         boot_config_json=json.dumps(payload.boot.model_dump()) if payload.boot else None,
+        metric_scaling_config_json=json.dumps(payload.metric_scaling.model_dump()) if payload.metric_scaling else None,
         tags_json=json.dumps(tags),
     )
     db.add(group)
@@ -104,9 +105,14 @@ def update_group(db: Session, group_id: str, payload: GroupUpdate) -> Group:
         group.boot_config_json = json.dumps(updates.pop("boot"))
 
     # Handle other JSON configs
-    for key in ["readiness", "cooldowns", "reconciliation", "alerting"]:
+    for key in ["readiness", "cooldowns", "reconciliation", "alerting", "metric_scaling"]:
         if key in updates:
-            json_key = f"{key}_config_json" if key != "cooldowns" else "cooldown_config_json"
+            if key == "cooldowns":
+                json_key = "cooldown_config_json"
+            elif key == "metric_scaling":
+                json_key = "metric_scaling_config_json"
+            else:
+                json_key = f"{key}_config_json"
             setattr(group, json_key, json.dumps(updates.pop(key)))
 
     for k, v in updates.items():
@@ -164,6 +170,7 @@ def group_to_response(group: Group) -> GroupResponse:
         cooldown_config=_parse(group.cooldown_config_json, CooldownConfig),
         reconciliation_config=_parse(group.reconciliation_config_json, ReconciliationConfig),
         alerting_config=_parse(group.alerting_config_json, AlertingConfig),
+        metric_scaling_config=_parse(group.metric_scaling_config_json, MetricScalingConfig),
         created_at=group.created_at,
         updated_at=group.updated_at,
     )

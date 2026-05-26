@@ -27,6 +27,7 @@ class Group(Base):
     boot_config_json = Column(Text, nullable=True)
     tags_json = Column(Text, nullable=True)
     nodebalancer_config_json = Column(Text, nullable=True)
+    metric_scaling_config_json = Column(Text, nullable=True)
     encrypted_linode_token = Column(Text, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

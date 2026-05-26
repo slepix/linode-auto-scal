@@ -46,8 +46,8 @@ func GetGroupByGroupID(db *sql.DB, groupID string) (*Group, error) {
 		       label_prefix, protected_tag, nodebalancer_id,
 		       network_config_json, readiness_config_json, cooldown_config_json,
 		       reconciliation_config_json, alerting_config_json, boot_config_json,
-		       tags_json, nodebalancer_config_json, encrypted_linode_token,
-		       created_at, updated_at, deleted_at
+		       tags_json, nodebalancer_config_json, metric_scaling_config_json,
+		       encrypted_linode_token, created_at, updated_at, deleted_at
 		FROM groups WHERE group_id = $1 AND deleted_at IS NULL
 	`, groupID).Scan(
 		&g.ID, &g.GroupID, &g.Enabled, &g.Region, &g.Type, &g.Image,
@@ -55,8 +55,8 @@ func GetGroupByGroupID(db *sql.DB, groupID string) (*Group, error) {
 		&g.LabelPrefix, &g.ProtectedTag, &g.NodebalancerID,
 		&g.NetworkConfigJSON, &g.ReadinessConfigJSON, &g.CooldownConfigJSON,
 		&g.ReconciliationConfigJSON, &g.AlertingConfigJSON, &g.BootConfigJSON,
-		&g.TagsJSON, &g.NodebalancerConfigJSON, &g.EncryptedLinodeToken,
-		&g.CreatedAt, &g.UpdatedAt, &g.DeletedAt,
+		&g.TagsJSON, &g.NodebalancerConfigJSON, &g.MetricScalingConfigJSON,
+		&g.EncryptedLinodeToken, &g.CreatedAt, &g.UpdatedAt, &g.DeletedAt,
 	)
 	if err != nil {
 		return nil, err

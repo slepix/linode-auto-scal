@@ -74,6 +74,33 @@ class AlertingConfig(BaseModel):
     send_on: List[str] = []
 
 
+class MetricScalingRule(BaseModel):
+    scale_up_threshold: float
+    scale_up_amount: int = 1
+    scale_down_threshold: float
+    scale_down_amount: int = 1
+    evaluation_window_seconds: int = 60
+
+
+class MetricScalingConfig(BaseModel):
+    enabled: bool = False
+    source_type: str = "prometheus"
+    endpoint: str = ""
+    auth_type: str = "none"
+    auth_header: Optional[str] = None
+    auth_token_ref: Optional[str] = None
+    query: str = ""
+    value_path: str = ""
+    poll_interval_seconds: int = 60
+    rule: MetricScalingRule = MetricScalingRule(
+        scale_up_threshold=80.0,
+        scale_up_amount=1,
+        scale_down_threshold=20.0,
+        scale_down_amount=1,
+        evaluation_window_seconds=60,
+    )
+
+
 class LinodeTokenInput(BaseModel):
     token: str
 
@@ -99,6 +126,7 @@ class GroupCreate(BaseModel):
     cooldowns: Optional[CooldownConfig] = None
     reconciliation: Optional[ReconciliationConfig] = None
     alerting: Optional[AlertingConfig] = None
+    metric_scaling: Optional[MetricScalingConfig] = None
 
 
 class GroupUpdate(BaseModel):
@@ -118,6 +146,7 @@ class GroupUpdate(BaseModel):
     cooldowns: Optional[CooldownConfig] = None
     reconciliation: Optional[ReconciliationConfig] = None
     alerting: Optional[AlertingConfig] = None
+    metric_scaling: Optional[MetricScalingConfig] = None
 
 
 class GroupResponse(BaseModel):
@@ -141,6 +170,7 @@ class GroupResponse(BaseModel):
     cooldown_config: Optional[CooldownConfig]
     reconciliation_config: Optional[ReconciliationConfig]
     alerting_config: Optional[AlertingConfig]
+    metric_scaling_config: Optional[MetricScalingConfig]
     created_at: datetime
     updated_at: datetime
 

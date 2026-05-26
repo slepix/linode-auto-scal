@@ -15,6 +15,7 @@ import AccordionDetails from '@mui/material/AccordionDetails';
 import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
 import Box from '@mui/material/Box';
+import MenuItem from '@mui/material/MenuItem';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { api } from '../../api/client';
 import type { Group, GroupUpdate } from '../../types';
@@ -103,6 +104,22 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
   const [alertingEnabled, setAlertingEnabled] = useState(group.alerting_config?.enabled ?? false);
   const [webhookUrl, setWebhookUrl] = useState(group.alerting_config?.webhook_url ?? '');
 
+  // Metric Scaling
+  const [metricEnabled, setMetricEnabled] = useState(group.metric_scaling_config?.enabled ?? false);
+  const [metricSourceType, setMetricSourceType] = useState(group.metric_scaling_config?.source_type ?? 'prometheus');
+  const [metricEndpoint, setMetricEndpoint] = useState(group.metric_scaling_config?.endpoint ?? '');
+  const [metricAuthType, setMetricAuthType] = useState(group.metric_scaling_config?.auth_type ?? 'none');
+  const [metricAuthHeader, setMetricAuthHeader] = useState(group.metric_scaling_config?.auth_header ?? '');
+  const [metricAuthToken, setMetricAuthToken] = useState(group.metric_scaling_config?.auth_token_ref ?? '');
+  const [metricQuery, setMetricQuery] = useState(group.metric_scaling_config?.query ?? '');
+  const [metricValuePath, setMetricValuePath] = useState(group.metric_scaling_config?.value_path ?? '');
+  const [metricPollInterval, setMetricPollInterval] = useState(group.metric_scaling_config?.poll_interval_seconds ?? 60);
+  const [metricScaleUpThreshold, setMetricScaleUpThreshold] = useState(group.metric_scaling_config?.rule?.scale_up_threshold ?? 80);
+  const [metricScaleUpAmount, setMetricScaleUpAmount] = useState(group.metric_scaling_config?.rule?.scale_up_amount ?? 1);
+  const [metricScaleDownThreshold, setMetricScaleDownThreshold] = useState(group.metric_scaling_config?.rule?.scale_down_threshold ?? 20);
+  const [metricScaleDownAmount, setMetricScaleDownAmount] = useState(group.metric_scaling_config?.rule?.scale_down_amount ?? 1);
+  const [metricEvalWindow, setMetricEvalWindow] = useState(group.metric_scaling_config?.rule?.evaluation_window_seconds ?? 60);
+
   const handleSubmit = async () => {
     setError(null);
     setLoading(true);
@@ -124,6 +141,25 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
           headers: null,
           bearer_token_ref: null,
           send_on: [],
+        },
+      };
+
+      data.metric_scaling = {
+        enabled: metricEnabled,
+        source_type: metricSourceType,
+        endpoint: metricEndpoint,
+        auth_type: metricAuthType,
+        auth_header: metricAuthHeader || null,
+        auth_token_ref: metricAuthToken || null,
+        query: metricQuery,
+        value_path: metricValuePath,
+        poll_interval_seconds: metricPollInterval,
+        rule: {
+          scale_up_threshold: metricScaleUpThreshold,
+          scale_up_amount: metricScaleUpAmount,
+          scale_down_threshold: metricScaleDownThreshold,
+          scale_down_amount: metricScaleDownAmount,
+          evaluation_window_seconds: metricEvalWindow,
         },
       };
 
@@ -675,6 +711,194 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
                     placeholder="https://hooks.slack.com/..."
                   />
                 </Grid>
+              )}
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion disableGutters sx={{ bgcolor: 'background.default', '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle2">Metric-Based Scaling</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={<Switch checked={metricEnabled} onChange={(e) => setMetricEnabled(e.target.checked)} />}
+                  label="Enable Metric-Based Scaling"
+                />
+              </Grid>
+              {metricEnabled && (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      select
+                      label="Source Type"
+                      value={metricSourceType}
+                      onChange={(e) => setMetricSourceType(e.target.value)}
+                      size="small"
+                      helperText="Monitoring system template"
+                    >
+                      <MenuItem value="prometheus">Prometheus</MenuItem>
+                      <MenuItem value="zabbix">Zabbix</MenuItem>
+                      <MenuItem value="nagios">Nagios</MenuItem>
+                      <MenuItem value="elasticsearch">Elasticsearch</MenuItem>
+                      <MenuItem value="datadog">Datadog</MenuItem>
+                      <MenuItem value="custom_http">Custom HTTP</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      select
+                      label="Auth Type"
+                      value={metricAuthType}
+                      onChange={(e) => setMetricAuthType(e.target.value)}
+                      size="small"
+                    >
+                      <MenuItem value="none">None</MenuItem>
+                      <MenuItem value="bearer">Bearer Token</MenuItem>
+                      <MenuItem value="basic">Basic Auth</MenuItem>
+                      <MenuItem value="api_key_header">API Key Header</MenuItem>
+                    </TextField>
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      fullWidth
+                      label="Endpoint URL"
+                      value={metricEndpoint}
+                      onChange={(e) => setMetricEndpoint(e.target.value)}
+                      size="small"
+                      placeholder={metricSourceType === 'prometheus' ? 'http://prometheus:9090' : 'https://monitoring.example.com'}
+                      helperText={metricSourceType === 'prometheus' ? 'Prometheus server base URL (without /api/v1/query)' : 'Monitoring system API endpoint'}
+                    />
+                  </Grid>
+                  {metricAuthType !== 'none' && (
+                    <>
+                      {metricAuthType === 'api_key_header' && (
+                        <Grid size={{ xs: 12, sm: 4 }}>
+                          <TextField
+                            fullWidth
+                            label="Header Name"
+                            value={metricAuthHeader}
+                            onChange={(e) => setMetricAuthHeader(e.target.value)}
+                            size="small"
+                            placeholder="X-API-Key"
+                          />
+                        </Grid>
+                      )}
+                      <Grid size={{ xs: 12, sm: metricAuthType === 'api_key_header' ? 8 : 12 }}>
+                        <TextField
+                          fullWidth
+                          label={metricAuthType === 'basic' ? 'Credentials (user:pass)' : 'Token / Key'}
+                          value={metricAuthToken}
+                          onChange={(e) => setMetricAuthToken(e.target.value)}
+                          size="small"
+                          type="password"
+                          placeholder={metricAuthType === 'basic' ? 'username:password' : 'token-value'}
+                        />
+                      </Grid>
+                    </>
+                  )}
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      fullWidth
+                      label="Query"
+                      value={metricQuery}
+                      onChange={(e) => setMetricQuery(e.target.value)}
+                      size="small"
+                      multiline
+                      rows={2}
+                      placeholder={metricSourceType === 'prometheus' ? 'avg(cpu_usage_percent{group="my-group"})' : metricSourceType === 'zabbix' ? 'Item ID (e.g. 12345)' : 'Query expression'}
+                      helperText={metricSourceType === 'prometheus' ? 'PromQL expression' : metricSourceType === 'zabbix' ? 'Zabbix item ID' : metricSourceType === 'elasticsearch' ? 'Elasticsearch query body (JSON)' : 'Query string or parameters'}
+                    />
+                  </Grid>
+                  {(metricSourceType === 'elasticsearch' || metricSourceType === 'custom_http' || metricSourceType === 'nagios') && (
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        fullWidth
+                        label="Value Path (JSONPath)"
+                        value={metricValuePath}
+                        onChange={(e) => setMetricValuePath(e.target.value)}
+                        size="small"
+                        placeholder="aggregations.avg_cpu.value"
+                        helperText="Dot-separated path to numeric value in JSON response"
+                      />
+                    </Grid>
+                  )}
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Poll Interval (s)"
+                      type="number"
+                      value={metricPollInterval}
+                      onChange={(e) => setMetricPollInterval(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 10 } }}
+                      helperText="Min 10 seconds"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <TextField
+                      fullWidth
+                      label="Eval Window (s)"
+                      type="number"
+                      value={metricEvalWindow}
+                      onChange={(e) => setMetricEvalWindow(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 10 } }}
+                      helperText="Samples averaged over"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                      Scaling Rules: scale up when average metric value exceeds the upper threshold, scale down when it falls below the lower threshold.
+                    </Typography>
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Scale Up Threshold"
+                      type="number"
+                      value={metricScaleUpThreshold}
+                      onChange={(e) => setMetricScaleUpThreshold(Number(e.target.value))}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Scale Up Amount"
+                      type="number"
+                      value={metricScaleUpAmount}
+                      onChange={(e) => setMetricScaleUpAmount(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1 } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Scale Down Threshold"
+                      type="number"
+                      value={metricScaleDownThreshold}
+                      onChange={(e) => setMetricScaleDownThreshold(Number(e.target.value))}
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Scale Down Amount"
+                      type="number"
+                      value={metricScaleDownAmount}
+                      onChange={(e) => setMetricScaleDownAmount(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1 } }}
+                    />
+                  </Grid>
+                </>
               )}
             </Grid>
           </AccordionDetails>

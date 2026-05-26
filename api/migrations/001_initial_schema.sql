@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS groups (
     boot_config_json          TEXT,
     tags_json                 TEXT,
     nodebalancer_config_json  TEXT,
+    metric_scaling_config_json TEXT,
     encrypted_linode_token    TEXT         NOT NULL,
     created_at                TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
     updated_at                TIMESTAMPTZ  NOT NULL DEFAULT NOW(),

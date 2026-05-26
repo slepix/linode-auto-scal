@@ -12,6 +12,7 @@ import (
 
 	"github.com/linode-instance-autoscaler/controller/internal/config"
 	dbpkg "github.com/linode-instance-autoscaler/controller/internal/db"
+	"github.com/linode-instance-autoscaler/controller/internal/metricpoller"
 	"github.com/linode-instance-autoscaler/controller/internal/metrics"
 	"github.com/linode-instance-autoscaler/controller/internal/reconciler"
 	"github.com/linode-instance-autoscaler/controller/internal/scaler"
@@ -39,6 +40,10 @@ func main() {
 
 	s := scaler.New(db, cfg.SecretKey, log)
 	rec := reconciler.New(db, cfg.SecretKey, log)
+
+	// Start metric-based scaling poller (non-blocking)
+	mp := metricpoller.NewPoller(db, log)
+	mp.Start()
 
 	// Start metrics server
 	go func() {
@@ -282,8 +287,8 @@ func listEnabledGroups(db *sql.DB) ([]dbpkg.Group, error) {
 		       label_prefix, protected_tag, nodebalancer_id,
 		       network_config_json, readiness_config_json, cooldown_config_json,
 		       reconciliation_config_json, alerting_config_json, boot_config_json,
-		       tags_json, nodebalancer_config_json, encrypted_linode_token,
-		       created_at, updated_at, deleted_at
+		       tags_json, nodebalancer_config_json, metric_scaling_config_json,
+		       encrypted_linode_token, created_at, updated_at, deleted_at
 		FROM groups WHERE enabled = true AND deleted_at IS NULL
 	`)
 	if err != nil {
@@ -300,8 +305,8 @@ func listEnabledGroups(db *sql.DB) ([]dbpkg.Group, error) {
 			&g.LabelPrefix, &g.ProtectedTag, &g.NodebalancerID,
 			&g.NetworkConfigJSON, &g.ReadinessConfigJSON, &g.CooldownConfigJSON,
 			&g.ReconciliationConfigJSON, &g.AlertingConfigJSON, &g.BootConfigJSON,
-			&g.TagsJSON, &g.NodebalancerConfigJSON, &g.EncryptedLinodeToken,
-			&g.CreatedAt, &g.UpdatedAt, &g.DeletedAt,
+			&g.TagsJSON, &g.NodebalancerConfigJSON, &g.MetricScalingConfigJSON,
+			&g.EncryptedLinodeToken, &g.CreatedAt, &g.UpdatedAt, &g.DeletedAt,
 		)
 		if err != nil {
 			return nil, err

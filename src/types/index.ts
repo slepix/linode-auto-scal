@@ -19,6 +19,7 @@ export interface Group {
   cooldown_config: CooldownConfig | null;
   reconciliation_config: ReconciliationConfig | null;
   alerting_config: AlertingConfig | null;
+  metric_scaling_config: MetricScalingConfig | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +95,27 @@ export interface AlertingConfig {
   send_on: string[];
 }
 
+export interface MetricScalingRule {
+  scale_up_threshold: number;
+  scale_up_amount: number;
+  scale_down_threshold: number;
+  scale_down_amount: number;
+  evaluation_window_seconds: number;
+}
+
+export interface MetricScalingConfig {
+  enabled: boolean;
+  source_type: string;
+  endpoint: string;
+  auth_type: string;
+  auth_header: string | null;
+  auth_token_ref: string | null;
+  query: string;
+  value_path: string;
+  poll_interval_seconds: number;
+  rule: MetricScalingRule;
+}
+
 export interface GroupCreate {
   group_id: string;
   enabled: boolean;
@@ -115,6 +137,7 @@ export interface GroupCreate {
   cooldowns?: CooldownConfig;
   reconciliation?: ReconciliationConfig;
   alerting?: AlertingConfig;
+  metric_scaling?: MetricScalingConfig;
 }
 
 export interface GroupUpdate {
@@ -134,6 +157,7 @@ export interface GroupUpdate {
   cooldowns?: CooldownConfig;
   reconciliation?: ReconciliationConfig;
   alerting?: AlertingConfig;
+  metric_scaling?: MetricScalingConfig;
 }
 
 export interface GroupStatus {

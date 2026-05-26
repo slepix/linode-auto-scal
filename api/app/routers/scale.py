@@ -50,9 +50,12 @@ def scale_down_group(
     db: Session = Depends(get_db),
     api_key=Depends(require_permission("scale")),
 ):
+    data = {"action": "scale_down", "amount": payload.amount, "reason": payload.reason}
+    if payload.target_instance_ids:
+        data["target_instance_ids"] = payload.target_instance_ids
     req = create_scale_request(
         db, group_id, "scale_down",
-        {"action": "scale_down", "amount": payload.amount, "reason": payload.reason},
+        data,
         idempotency_key, api_key.id
     )
     return req

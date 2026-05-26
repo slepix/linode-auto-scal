@@ -12,6 +12,7 @@ class ScaleRequest(Base):
     desired_count = Column(Integer, nullable=True)
     action = Column(String, nullable=True)
     amount = Column(Integer, nullable=True)
+    target_instance_ids = Column(Text, nullable=True)
     status = Column(String, nullable=False, default="queued", index=True)
     reason = Column(Text, nullable=True)
     source = Column(String, nullable=True)

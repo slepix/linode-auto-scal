@@ -3,6 +3,7 @@ package scaler
 import (
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -356,6 +357,15 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 		return err
 	}
 
+	// Parse targeted instance IDs if provided
+	var targetIDs []string
+	if req.TargetInstanceIDs.Valid && req.TargetInstanceIDs.String != "" {
+		if err := json.Unmarshal([]byte(req.TargetInstanceIDs.String), &targetIDs); err != nil {
+			log.Warnw("failed to parse target_instance_ids, falling back to default selection", "error", err)
+			targetIDs = nil
+		}
+	}
+
 	// Filter out protected instances
 	var candidates []dbpkg.Instance
 	for _, inst := range activeInstances {
@@ -364,17 +374,45 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 		}
 	}
 
-	// newest_first strategy - activeInstances is already ordered DESC by created_at
-	if len(candidates) < amount {
-		amount = len(candidates)
+	// If target IDs specified, select those specific instances
+	var toDelete []dbpkg.Instance
+	if len(targetIDs) > 0 {
+		targetSet := make(map[string]bool, len(targetIDs))
+		for _, id := range targetIDs {
+			targetSet[id] = true
+		}
+		for _, inst := range candidates {
+			if targetSet[inst.ID] {
+				toDelete = append(toDelete, inst)
+			}
+		}
+		if len(toDelete) != len(targetIDs) {
+			log.Warnw("some targeted instances not found or are protected",
+				"requested", len(targetIDs), "found", len(toDelete))
+		}
+		amount = len(toDelete)
+	}
+
+	// Fallback: newest_first strategy - activeInstances is already ordered DESC by created_at
+	if len(toDelete) == 0 {
+		if len(candidates) < amount {
+			amount = len(candidates)
+		}
+		toDelete = candidates[:amount]
 	}
 
 	if len(candidates)-amount < group.MinInstances {
 		amount = len(candidates) - group.MinInstances
+		if amount <= 0 {
+			log.Infow("no instances eligible for scale-down (min_instances constraint)")
+			dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
+			return nil
+		}
+		toDelete = toDelete[:amount]
 	}
 
 	if amount <= 0 {
-		log.Infow("no instances eligible for scale-down (min_instances constraint)")
+		log.Infow("no instances eligible for scale-down")
 		dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
 		return nil
 	}
@@ -395,7 +433,6 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 		parallelism = nbCfg.Bindings[0].DrainParallelism
 	}
 
-	toDelete := candidates[:amount]
 	var successCount int64
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallelism)

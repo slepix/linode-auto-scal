@@ -75,8 +75,12 @@ export const api = {
   // Scaling
   scaleUp: (id: string, amount: number, reason?: string) =>
     request<ScaleRequest>('POST', `/v1/groups/${id}/scale-up`, { amount, reason }),
-  scaleDown: (id: string, amount: number, reason?: string) =>
-    request<ScaleRequest>('POST', `/v1/groups/${id}/scale-down`, { amount, reason }),
+  scaleDown: (id: string, amount: number, reason?: string, target_instance_ids?: string[]) =>
+    request<ScaleRequest>('POST', `/v1/groups/${id}/scale-down`, {
+      amount,
+      reason,
+      ...(target_instance_ids?.length ? { target_instance_ids } : {}),
+    }),
   setDesired: (id: string, desired_count: number, reason?: string, dry_run = false) =>
     request<ScaleRequest>('POST', `/v1/groups/${id}/scale`, { desired_count, reason, dry_run: dry_run ? 'true' : 'false' }),
 

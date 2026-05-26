@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS scale_requests (
     source               VARCHAR(128),
     idempotency_key      VARCHAR(256),
     request_hash         VARCHAR(64),
+    instance_ids_json    TEXT,
     created_by_api_key_id VARCHAR(64),
     dry_run              VARCHAR(8)   NOT NULL DEFAULT 'false',
     created_at           TIMESTAMPTZ  NOT NULL DEFAULT NOW(),

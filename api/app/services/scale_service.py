@@ -15,6 +15,19 @@ def _request_hash(payload: dict) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()
 
 
+def _compute_new_desired(group: "Group", payload: dict) -> Optional[int]:
+    if payload.get("desired_count") is not None:
+        return max(group.min_instances, min(group.max_instances, payload["desired_count"]))
+    action = payload.get("action")
+    amount = payload.get("amount")
+    if action and amount:
+        if action == "scale_up":
+            return min(group.max_instances, group.desired_count + amount)
+        elif action == "scale_down":
+            return max(group.min_instances, group.desired_count - amount)
+    return None
+
+
 def _check_concurrent(db: Session, group_id: str) -> None:
     active = db.query(ScaleRequest).filter(
         ScaleRequest.group_id == group_id,
@@ -70,6 +83,13 @@ def create_scale_request(
 
     instance_ids = payload.get("instance_ids")
     instance_ids_json = json.dumps(instance_ids) if instance_ids else None
+
+    # Update desired_count on the group to match the intent of the request
+    if not dry_run:
+        new_desired = _compute_new_desired(group, payload)
+        if new_desired is not None and new_desired != group.desired_count:
+            group.desired_count = new_desired
+            group.updated_at = datetime.now(timezone.utc)
 
     req = ScaleRequest(
         id=uuid.uuid4().hex,

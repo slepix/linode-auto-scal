@@ -36,8 +36,13 @@ Terraform provisions:
 - Autoscaler VM with VPC interface + NAT 1:1; public IP discovered at boot via the Linode Metadata Service
 - Firewall rules (SSH on 22, API on 8000, HTTP on 80, metrics on 9090)
 - Optional DNS A record if `domain_id` is set
+- All database migrations in `api/migrations/` applied as the app user (ensures correct table ownership)
 
 The database and VM are independent resources — no circular dependency. The DB's `allow_list` is set to the VPC subnet CIDR rather than the VM's IP, which is the correct pattern for Linode Managed DB + VPC networking.
+
+### Database Migrations
+
+All schema DDL lives in `api/migrations/001_initial_schema.sql`. The `user_data.sh.tpl` boot script applies all `*.sql` files in order during initial provisioning. Subsequent deploys via `update.sh` use a `schema_migrations` tracking table to apply only new migrations.
 
 ## How the VM Discovers Its Public IP
 

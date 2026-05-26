@@ -30,6 +30,26 @@ Authorization: Bearer <webhook_key>
 }
 ```
 
+### Targeted Scale-Down
+
+Remove specific Linode instances by ID:
+
+```json
+POST /v1/webhooks/scale
+Authorization: Bearer <webhook_key>
+
+{
+  "group_id": "web-prod",
+  "action": "scale_down",
+  "amount": 2,
+  "instance_ids": [97994040, 97994055],
+  "source": "orchestrator",
+  "reason": "decommissioning specific nodes"
+}
+```
+
+When `instance_ids` is provided, the controller targets those Linodes for deletion instead of using the default newest-first selection strategy.
+
 Supported `action` values: `scale_up`, `scale_down`, `set_desired_count`
 
 ## Outbound Alert Webhooks

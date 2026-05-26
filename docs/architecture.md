@@ -68,7 +68,7 @@ The Linode Instance Autoscaler is a self-hosted, API-first autoscaling system fo
 ## Data Flow: Scale-Down
 1. External caller → `POST /v1/groups/{id}/scale-down`
 2. Cooldown + min_instances + healthy capacity checks
-3. Select newest non-protected active instance
+3. Select target instances: if `instance_ids` provided, use those specific Linodes; otherwise select newest non-protected active instances
 4. Set NodeBalancer node mode to `drain`
 5. Wait `drain_wait_seconds`
 6. Delete NB node, delete Linode, mark instance deleted

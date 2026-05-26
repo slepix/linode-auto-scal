@@ -233,6 +233,23 @@ curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/scale-down" \
   }'
 ```
 
+### Scale Down Specific Instances
+
+Target specific Linode IDs for removal instead of the default newest-first strategy:
+
+```bash
+curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/scale-down" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 2,
+    "instance_ids": [97994040, 97994055],
+    "reason": "removing unhealthy nodes"
+  }'
+```
+
+When `instance_ids` is provided, the controller deletes those specific Linodes rather than selecting the newest non-protected instances. The `amount` field must match the length of `instance_ids`.
+
 ### Set Exact Desired Count
 
 ```bash
@@ -517,10 +534,14 @@ class AutoscalerClient:
         r.raise_for_status()
         return r.json()
 
-    def scale_down(self, group_id: str, amount: int = 1, reason: str = "") -> dict:
+    def scale_down(self, group_id: str, amount: int = 1, reason: str = "",
+                   instance_ids: list[int] | None = None) -> dict:
+        payload = {"amount": amount, "reason": reason}
+        if instance_ids:
+            payload["instance_ids"] = instance_ids
         r = self.session.post(
             f"{self.base_url}/v1/groups/{group_id}/scale-down",
-            json={"amount": amount, "reason": reason},
+            json=payload,
         )
         r.raise_for_status()
         return r.json()
@@ -600,10 +621,11 @@ class AutoscalerClient {
     });
   }
 
-  scaleDown(groupId: string, amount = 1, reason = "") {
+  scaleDown(groupId: string, amount = 1, reason = "", instanceIds?: number[]) {
     return this.request<ScaleResponse>("POST", `/v1/groups/${groupId}/scale-down`, {
       amount,
       reason,
+      ...(instanceIds && { instance_ids: instanceIds }),
     });
   }
 

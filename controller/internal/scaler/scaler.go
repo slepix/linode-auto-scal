@@ -126,15 +126,17 @@ func (s *Scaler) createSingleInstance(
 	useLinodeInterfaces := networkCfg != nil && networkCfg.VPCID > 0
 
 	if useLinodeInterfaces {
-		// VPC interface with auto-assigned address
+		// Single VPC interface; use 1:1 NAT for public IP if enabled
 		ipv4True := true
+		vpcAddr := linode.VPCIPv4Address{Address: "auto", Primary: true}
+		if networkCfg.NAT1To1 {
+			vpcAddr.NAT1To1Address = "auto"
+		}
 		vpcIface := linode.LinodeInterface{
 			VPC: &linode.LinodeVPCInterface{
 				SubnetID: networkCfg.SubnetID,
 				IPv4: &linode.VPCIPv4Config{
-					Addresses: []linode.VPCIPv4Address{
-						{Address: "auto", Primary: true},
-					},
+					Addresses: []linode.VPCIPv4Address{vpcAddr},
 				},
 			},
 			DefaultRoute: &linode.DefaultRoute{IPv4: &ipv4True},
@@ -147,25 +149,6 @@ func (s *Scaler) createSingleInstance(
 			vpcIface.FirewallID = &noFW
 		}
 		interfaces = append(interfaces, vpcIface)
-
-		// Public interface for internet access
-		publicIface := linode.LinodeInterface{
-			Public: &linode.LinodePublicInterface{
-				IPv4: &linode.PublicIPv4Config{
-					Addresses: []linode.PublicIPv4Address{
-						{Address: "auto", Primary: true},
-					},
-				},
-			},
-		}
-		if networkCfg.FirewallID > 0 {
-			fwID := networkCfg.FirewallID
-			publicIface.FirewallID = &fwID
-		} else {
-			noFW := -1
-			publicIface.FirewallID = &noFW
-		}
-		interfaces = append(interfaces, publicIface)
 	}
 
 	createReq := linode.CreateLinodeRequest{

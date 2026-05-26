@@ -51,6 +51,7 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
   const [vpcId, setVpcId] = useState(group.network_config?.vpc_id?.toString() ?? '');
   const [subnetId, setSubnetId] = useState(group.network_config?.subnet_id?.toString() ?? '');
   const [firewallId, setFirewallId] = useState(group.network_config?.firewall_id?.toString() ?? '');
+  const [nat1To1, setNat1To1] = useState(group.network_config?.nat_1_to_1 ?? false);
 
   // NodeBalancer
   const [nbEnabled, setNbEnabled] = useState(!!group.nodebalancer_config);
@@ -124,6 +125,7 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
           subnet_id: subnetId ? Number(subnetId) : null,
           firewall_id: firewallId ? Number(firewallId) : null,
           fallback_private_ipv4: true,
+          nat_1_to_1: nat1To1,
         };
       }
 
@@ -314,6 +316,15 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
                   size="small"
                   type="number"
                 />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={<Switch checked={nat1To1} onChange={(e) => setNat1To1(e.target.checked)} />}
+                  label="Enable 1:1 NAT (public IP)"
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pl: 6 }}>
+                  Assigns a public IPv4 address via 1:1 NAT on the VPC interface. Required for internet access without a separate public adapter.
+                </Typography>
               </Grid>
             </Grid>
           </AccordionDetails>

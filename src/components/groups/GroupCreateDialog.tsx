@@ -44,6 +44,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
   const [vpcId, setVpcId] = useState('');
   const [subnetId, setSubnetId] = useState('');
   const [firewallId, setFirewallId] = useState('');
+  const [nat1To1, setNat1To1] = useState(false);
 
   // Nodebalancer
   const [nbEnabled, setNbEnabled] = useState(false);
@@ -125,6 +126,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
           subnet_id: subnetId ? Number(subnetId) : null,
           firewall_id: firewallId ? Number(firewallId) : null,
           fallback_private_ipv4: true,
+          nat_1_to_1: nat1To1,
         };
       }
 
@@ -340,6 +342,15 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
                   size="small"
                   type="number"
                 />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={<Switch checked={nat1To1} onChange={(e) => setNat1To1(e.target.checked)} />}
+                  label="Enable 1:1 NAT (public IP)"
+                />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', pl: 6 }}>
+                  Assigns a public IPv4 address via 1:1 NAT on the VPC interface. Required for internet access without a separate public adapter.
+                </Typography>
               </Grid>
             </Grid>
           </AccordionDetails>

@@ -10,6 +10,7 @@ type NetworkConfig struct {
 	SubnetID           int    `json:"subnet_id"`
 	FirewallID         int    `json:"firewall_id"`
 	FallbackPrivateIPv4 bool  `json:"fallback_private_ipv4"`
+	NAT1To1            bool   `json:"nat_1_to_1"`
 }
 
 type NodebalancerBinding struct {

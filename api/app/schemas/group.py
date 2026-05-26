@@ -9,6 +9,7 @@ class NetworkConfig(BaseModel):
     subnet_id: Optional[int] = None
     firewall_id: Optional[int] = None
     fallback_private_ipv4: bool = True
+    nat_1_to_1: bool = False
 
 
 class NodebalancerBinding(BaseModel):

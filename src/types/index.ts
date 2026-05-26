@@ -29,6 +29,7 @@ export interface NetworkConfig {
   subnet_id: number | null;
   firewall_id: number | null;
   fallback_private_ipv4: boolean;
+  nat_1_to_1: boolean;
 }
 
 export interface NodebalancerBinding {

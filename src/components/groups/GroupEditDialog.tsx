@@ -77,6 +77,19 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
     group.boot_config?.cloud_init_user_data ?? ''
   );
 
+  // Readiness
+  const [initialWait, setInitialWait] = useState(group.readiness_config?.initial_wait_seconds ?? 90);
+  const [overallTimeout, setOverallTimeout] = useState(group.readiness_config?.overall_timeout_seconds ?? 0);
+  const [retryCount, setRetryCount] = useState(group.readiness_config?.retry_count ?? 3);
+  const [delayBetweenAttempts, setDelayBetweenAttempts] = useState(group.readiness_config?.delay_between_attempts_seconds ?? 60);
+  const [tcpEnabled, setTcpEnabled] = useState(group.readiness_config?.tcp?.enabled ?? false);
+  const [tcpPort, setTcpPort] = useState(group.readiness_config?.tcp?.port ?? 80);
+  const [tcpTimeout, setTcpTimeout] = useState(group.readiness_config?.tcp?.timeout_seconds ?? 5);
+  const [httpEnabled, setHttpEnabled] = useState(group.readiness_config?.http?.enabled ?? false);
+  const [httpUrl, setHttpUrl] = useState(group.readiness_config?.http?.url ?? 'http://{vpc_ipv4}:80/healthz');
+  const [httpExpectedStatus, setHttpExpectedStatus] = useState(group.readiness_config?.http?.expected_status ?? 200);
+  const [httpTimeout, setHttpTimeout] = useState(group.readiness_config?.http?.timeout_seconds ?? 5);
+
   // Cooldowns
   const [scaleUpCooldown, setScaleUpCooldown] = useState(group.cooldown_config?.scale_up_seconds ?? 300);
   const [scaleDownCooldown, setScaleDownCooldown] = useState(group.cooldown_config?.scale_down_seconds ?? 600);
@@ -154,6 +167,15 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
           cloud_init_user_data: cloudInitUserData.trim() || null,
         };
       }
+
+      data.readiness = {
+        initial_wait_seconds: initialWait,
+        tcp: tcpEnabled ? { enabled: true, port: tcpPort, timeout_seconds: tcpTimeout } : null,
+        http: httpEnabled ? { enabled: true, url: httpUrl, expected_status: httpExpectedStatus, timeout_seconds: httpTimeout } : null,
+        overall_timeout_seconds: overallTimeout,
+        retry_count: retryCount,
+        delay_between_attempts_seconds: delayBetweenAttempts,
+      };
 
       await api.updateGroup(group.group_id, data);
       onUpdated();
@@ -430,6 +452,139 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
                   helperText="cloud-config YAML (stored as-is, base64-encoded on deploy)"
                 />
               </Grid>
+            </Grid>
+          </AccordionDetails>
+        </Accordion>
+
+        <Accordion disableGutters sx={{ bgcolor: 'background.default', '&:before': { display: 'none' } }}>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Typography variant="subtitle2">Readiness Checks</Typography>
+          </AccordionSummary>
+          <AccordionDetails>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Initial Wait (s)"
+                  type="number"
+                  value={initialWait}
+                  onChange={(e) => setInitialWait(Number(e.target.value))}
+                  size="small"
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  helperText="Delay before first check"
+                />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Retry Count"
+                  type="number"
+                  value={retryCount}
+                  onChange={(e) => setRetryCount(Number(e.target.value))}
+                  size="small"
+                  slotProps={{ htmlInput: { min: 1 } }}
+                />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Delay Between (s)"
+                  type="number"
+                  value={delayBetweenAttempts}
+                  onChange={(e) => setDelayBetweenAttempts(Number(e.target.value))}
+                  size="small"
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  helperText="Between retries"
+                />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Overall Timeout (s)"
+                  type="number"
+                  value={overallTimeout}
+                  onChange={(e) => setOverallTimeout(Number(e.target.value))}
+                  size="small"
+                  slotProps={{ htmlInput: { min: 0 } }}
+                  helperText="0 = no limit"
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={<Switch checked={tcpEnabled} onChange={(e) => setTcpEnabled(e.target.checked)} />}
+                  label="TCP Check"
+                />
+              </Grid>
+              {tcpEnabled && (
+                <>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="TCP Port"
+                      type="number"
+                      value={tcpPort}
+                      onChange={(e) => setTcpPort(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1, max: 65535 } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="TCP Timeout (s)"
+                      type="number"
+                      value={tcpTimeout}
+                      onChange={(e) => setTcpTimeout(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1 } }}
+                    />
+                  </Grid>
+                </>
+              )}
+
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={<Switch checked={httpEnabled} onChange={(e) => setHttpEnabled(e.target.checked)} />}
+                  label="HTTP Check"
+                />
+              </Grid>
+              {httpEnabled && (
+                <>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="HTTP URL"
+                      value={httpUrl}
+                      onChange={(e) => setHttpUrl(e.target.value)}
+                      size="small"
+                      helperText="Use {vpc_ipv4} or {private_ipv4} as placeholders"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="Expected Status"
+                      type="number"
+                      value={httpExpectedStatus}
+                      onChange={(e) => setHttpExpectedStatus(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 100, max: 599 } }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 3 }}>
+                    <TextField
+                      fullWidth
+                      label="HTTP Timeout (s)"
+                      type="number"
+                      value={httpTimeout}
+                      onChange={(e) => setHttpTimeout(Number(e.target.value))}
+                      size="small"
+                      slotProps={{ htmlInput: { min: 1 } }}
+                    />
+                  </Grid>
+                </>
+              )}
             </Grid>
           </AccordionDetails>
         </Accordion>

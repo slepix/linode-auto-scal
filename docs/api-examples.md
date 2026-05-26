@@ -177,6 +177,42 @@ curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
   }'
 ```
 
+### Configure Metric-Based Scaling
+
+Enable automatic scaling based on an external metric (Prometheus, Zabbix, Datadog, Elasticsearch, Nagios, or any HTTP endpoint):
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "prometheus",
+      "endpoint": "http://prometheus.internal:9090",
+      "auth_type": "none",
+      "query": "avg(cpu_usage_percent{group=\"web-prod\"})",
+      "poll_interval_seconds": 30,
+      "rule": {
+        "scale_up_threshold": 80,
+        "scale_up_amount": 2,
+        "scale_down_threshold": 20,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 120
+      }
+    }
+  }'
+```
+
+### Disable Metric-Based Scaling
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"metric_scaling": {"enabled": false}}'
+```
+
 ### Disable a Group (Pause Autoscaling)
 
 ```bash

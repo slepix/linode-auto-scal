@@ -58,6 +58,76 @@ curl -X POST http://localhost:8000/v1/groups \
 EOF
 ```
 
+## Metric-Based Scaling
+
+Configure the autoscaler to poll an external monitoring system and scale automatically based on metric values. Supported source types: `prometheus`, `zabbix`, `nagios`, `elasticsearch`, `datadog`, `custom_http`.
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "prometheus",
+      "endpoint": "http://prometheus.internal:9090",
+      "auth_type": "none",
+      "query": "avg(cpu_usage_percent{group=\"web-prod\"})",
+      "value_path": "",
+      "poll_interval_seconds": 30,
+      "rule": {
+        "scale_up_threshold": 80,
+        "scale_up_amount": 2,
+        "scale_down_threshold": 20,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 120
+      }
+    }
+  }'
+```
+
+### Metric Scaling Fields
+
+| Field | Description |
+|---|---|
+| `enabled` | Whether metric-based scaling is active |
+| `source_type` | Monitoring system template: `prometheus`, `zabbix`, `nagios`, `elasticsearch`, `datadog`, `custom_http` |
+| `endpoint` | Base URL of the monitoring system API |
+| `auth_type` | Authentication method: `none`, `bearer`, `basic`, `api_key_header` |
+| `auth_header` | Custom header name when using `api_key_header` auth (default: `X-API-Key`) |
+| `auth_token_ref` | Token, API key, or `user:pass` credentials for authentication |
+| `query` | Source-specific query (PromQL for Prometheus, item ID for Zabbix, JSON body for Elasticsearch, etc.) |
+| `value_path` | Dot-separated JSONPath to extract numeric value from response (used for `elasticsearch`, `custom_http`, `nagios`) |
+| `poll_interval_seconds` | How often to fetch the metric (minimum: 10s) |
+| `rule.scale_up_threshold` | Average metric value above which to scale up |
+| `rule.scale_up_amount` | Number of instances to add when scaling up |
+| `rule.scale_down_threshold` | Average metric value below which to scale down |
+| `rule.scale_down_amount` | Number of instances to remove when scaling down |
+| `rule.evaluation_window_seconds` | Time window for averaging samples before evaluating thresholds |
+
+### Source Type Templates
+
+| Source | Query Format | Value Extraction |
+|---|---|---|
+| `prometheus` | PromQL expression | Automatic (first result value) |
+| `zabbix` | Item ID (numeric) | Automatic (`lastvalue`) |
+| `nagios` | Service/host identifier | Via `value_path` |
+| `elasticsearch` | JSON query body | Via `value_path` (e.g. `aggregations.avg_cpu.value`) |
+| `datadog` | Datadog metric query | Automatic (last point in series) |
+| `custom_http` | URL query params | Via `value_path` or plain numeric response body |
+
+### How It Works
+
+1. The Go controller runs a metric poller as a separate non-blocking goroutine
+2. For each group with metric scaling enabled, it fetches the metric at the configured interval
+3. Samples are collected into a sliding time window (`evaluation_window_seconds`)
+4. The average of all samples in the window is compared against thresholds
+5. If the average exceeds `scale_up_threshold`, a scale-up request is submitted to the queue
+6. If the average falls below `scale_down_threshold`, a scale-down request is submitted
+7. Scale requests go through the normal queue and respect cooldowns, min/max instances, and concurrent operation limits
+
+---
+
 ## Key Fields
 
 | Field | Description |

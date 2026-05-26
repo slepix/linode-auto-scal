@@ -46,6 +46,7 @@ The Linode Instance Autoscaler is a self-hosted, API-first autoscaling system fo
 - Polls `scale_requests` table every 5 seconds for pending requests
 - Executes scale-up and scale-down workflows asynchronously
 - Runs per-group reconciliation loop (default: every 60s)
+- Runs a metric poller goroutine that fetches external metrics and submits scale requests (non-blocking)
 - Emits structured events to `scale_events` table
 - Sends outbound alert webhooks on failures
 - Exposes Prometheus metrics on :9090
@@ -54,6 +55,16 @@ The Linode Instance Autoscaler is a self-hosted, API-first autoscaling system fo
 - Single source of truth for all state
 - Groups, instances, NB bindings, scale requests, events, drift records, API keys
 - Connected via VPC private networking in production
+
+## Data Flow: Metric-Based Scaling
+1. Metric poller goroutine checks every 5 seconds for groups with `metric_scaling_config`
+2. For each group, respects its `poll_interval_seconds` before fetching again
+3. Fetches metric from external system (Prometheus, Zabbix, Datadog, etc.)
+4. Adds sample to a sliding evaluation window per group
+5. Averages all samples in the window and compares against thresholds
+6. If threshold breached, inserts a `ScaleRequest` with `source=metric_poller`
+7. Request enters the normal queue and is picked up by the scale request processor
+8. Cooldowns, min/max constraints, and concurrent op checks still apply
 
 ## Data Flow: Scale-Up
 1. External caller → `POST /v1/groups/{id}/scale-up`

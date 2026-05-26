@@ -6,6 +6,7 @@ This guide shows how to connect external monitoring, CI/CD, and alerting systems
 
 ## Table of Contents
 
+- [Built-In Metric Polling (Recommended)](#built-in-metric-polling-recommended)
 - [Grafana (Metric-Based Autoscaling)](#grafana-metric-based-autoscaling)
 - [Prometheus (Scraping Metrics)](#prometheus-scraping-metrics)
 - [GitHub Actions (Deploy-Time Scaling)](#github-actions-deploy-time-scaling)
@@ -19,7 +20,203 @@ This guide shows how to connect external monitoring, CI/CD, and alerting systems
 
 ---
 
+## Built-In Metric Polling (Recommended)
+
+The autoscaler has a built-in metric poller that can directly query your monitoring system without any external webhook middleware. This is the simplest way to implement metric-based autoscaling.
+
+### Supported Monitoring Systems
+
+| System | Source Type | Query Format |
+|--------|------------|--------------|
+| Prometheus | `prometheus` | PromQL expression |
+| Zabbix | `zabbix` | Item ID |
+| Nagios | `nagios` | Host/service path |
+| Elasticsearch | `elasticsearch` | JSON query body |
+| Datadog | `datadog` | Datadog metric query |
+| Any HTTP API | `custom_http` | URL with optional query params |
+
+### Prometheus Example
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "prometheus",
+      "endpoint": "http://prometheus.internal:9090",
+      "auth_type": "none",
+      "query": "avg(cpu_usage_percent{group=\"web-prod\"})",
+      "poll_interval_seconds": 30,
+      "rule": {
+        "scale_up_threshold": 80,
+        "scale_up_amount": 2,
+        "scale_down_threshold": 20,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 120
+      }
+    }
+  }'
+```
+
+### Zabbix Example
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "zabbix",
+      "endpoint": "https://zabbix.example.com/api_jsonrpc.php",
+      "auth_type": "none",
+      "auth_token_ref": "your-zabbix-auth-token",
+      "query": "12345",
+      "poll_interval_seconds": 60,
+      "rule": {
+        "scale_up_threshold": 90,
+        "scale_up_amount": 1,
+        "scale_down_threshold": 30,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 180
+      }
+    }
+  }'
+```
+
+### Elasticsearch Example
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "elasticsearch",
+      "endpoint": "https://elasticsearch.internal:9200/metrics-*",
+      "auth_type": "basic",
+      "auth_token_ref": "elastic:changeme",
+      "query": "{\"size\":0,\"query\":{\"range\":{\"@timestamp\":{\"gte\":\"now-5m\"}}},\"aggs\":{\"avg_cpu\":{\"avg\":{\"field\":\"system.cpu.total.pct\"}}}}",
+      "value_path": "aggregations.avg_cpu.value",
+      "poll_interval_seconds": 60,
+      "rule": {
+        "scale_up_threshold": 0.85,
+        "scale_up_amount": 1,
+        "scale_down_threshold": 0.25,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 120
+      }
+    }
+  }'
+```
+
+### Datadog Example
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "datadog",
+      "endpoint": "https://api.datadoghq.com",
+      "auth_type": "api_key_header",
+      "auth_header": "DD-API-KEY",
+      "auth_token_ref": "your-datadog-api-key",
+      "query": "avg:system.cpu.user{group:web-prod}",
+      "poll_interval_seconds": 60,
+      "rule": {
+        "scale_up_threshold": 75,
+        "scale_up_amount": 2,
+        "scale_down_threshold": 15,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 300
+      }
+    }
+  }'
+```
+
+### Custom HTTP Example
+
+For any monitoring system with an HTTP API that returns a numeric value:
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": true,
+      "source_type": "custom_http",
+      "endpoint": "https://monitoring.internal/api/metric",
+      "auth_type": "bearer",
+      "auth_token_ref": "your-api-token",
+      "query": "name=cpu_avg&group=web-prod",
+      "value_path": "data.value",
+      "poll_interval_seconds": 30,
+      "rule": {
+        "scale_up_threshold": 80,
+        "scale_up_amount": 1,
+        "scale_down_threshold": 20,
+        "scale_down_amount": 1,
+        "evaluation_window_seconds": 60
+      }
+    }
+  }'
+```
+
+### Authentication Options
+
+| Auth Type | `auth_token_ref` Format | Description |
+|-----------|------------------------|-------------|
+| `none` | (unused) | No authentication |
+| `bearer` | `token-value` | Sends `Authorization: Bearer <token>` |
+| `basic` | `username:password` | Sends HTTP Basic Auth |
+| `api_key_header` | `key-value` | Sends custom header (set name in `auth_header`) |
+
+### How It Works
+
+The metric poller runs as a separate goroutine in the Go controller and never blocks scaling operations:
+
+1. Every 5 seconds, the poller checks for groups with metric scaling enabled
+2. For each group, it respects the configured `poll_interval_seconds`
+3. The metric is fetched from the external system using the source-specific adapter
+4. Values are stored in a sliding window of `evaluation_window_seconds` duration
+5. Once at least 2 samples exist, the window average is compared against thresholds
+6. If the threshold is breached, a scale request is submitted to the normal queue
+7. The request then goes through standard cooldown checks, min/max constraints, etc.
+
+### Events
+
+The metric poller emits events to the scale events timeline:
+
+| Event Type | Severity | Description |
+|---|---|---|
+| `metric_fetch_failed` | warning | Could not fetch metric from external system |
+| `metric_scale_triggered` | info | Threshold breached, scale request submitted |
+
+### Disabling Metric Scaling
+
+```bash
+curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
+  -H "Authorization: Bearer $AUTOSCALER_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metric_scaling": {
+      "enabled": false
+    }
+  }'
+```
+
+---
+
 ## Grafana (Metric-Based Autoscaling)
+
+> **Note**: For simple metric-based scaling, consider using the [built-in metric polling](#built-in-metric-polling-recommended) instead. The Grafana webhook approach below is useful when you need Grafana's advanced alerting logic, multi-condition rules, or templated notifications.
 
 Use Grafana alerting to trigger autoscaling based on application metrics (CPU, memory, request rate, queue depth, etc).
 

@@ -77,6 +77,8 @@ When a group's `alerting.enabled = true`, the autoscaler POSTs to `alerting.webh
 | `reconcile_failed` | error | Reconciliation loop failed |
 | `nodebalancer_update_failed` | error | Could not update NB node |
 | `linode_api_rate_limited` | warning | Hit Linode API 429 |
+| `metric_fetch_failed` | warning | Failed to fetch metric from external monitoring system |
+| `metric_scale_triggered` | info | Metric threshold breached, scale request submitted |
 
 ### Alerting Config
 

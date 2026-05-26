@@ -51,7 +51,7 @@ psql "$${DB_ROOT_URL}" -tc "SELECT 1 FROM pg_database WHERE datname = '${db_name
 psql "$${DB_ROOT_URL}" -tc "SELECT 1 FROM pg_roles WHERE rolname = '${db_app_user}'" | grep -q 1 || \
   psql "$${DB_ROOT_URL}" -c "CREATE USER ${db_app_user} WITH PASSWORD '${db_app_password}';"
 
-psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" <<'GRANTSQL'
+psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" <<GRANTSQL || true
 GRANT CONNECT ON DATABASE ${db_name} TO ${db_app_user};
 GRANT USAGE ON SCHEMA public TO ${db_app_user};
 GRANT CREATE ON SCHEMA public TO ${db_app_user};
@@ -63,7 +63,9 @@ GRANTSQL
 
 # Run all schema migrations in order (as root, since it creates the tables)
 DB_APP_URL="postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require"
-for migration in $(ls "$REPO_DIR/api/migrations/"*.sql | sort); do
+echo "Running migrations from $REPO_DIR/api/migrations/..."
+for migration in $REPO_DIR/api/migrations/*.sql; do
+  [ -f "$migration" ] || continue
   echo "Applying migration: $migration"
   psql "$${DB_APP_URL}" -f "$migration"
 done

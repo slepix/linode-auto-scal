@@ -29,12 +29,9 @@ rm -rf /var/www/html/*
 cp -r dist/* /var/www/html/
 systemctl reload nginx
 
-# ─── Rebuild and restart backend containers ──────────────────────────────────
+# ─── Rebuild backend containers ──────────────────────────────────────────────
 echo "Building backend containers..."
 docker compose -f docker-compose.yml -f docker-compose.prod.yml build --no-cache
-
-echo "Restarting containers..."
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api controller
 
 # ─── Run migrations if any ───────────────────────────────────────────────────
 echo "Checking for new migrations..."
@@ -88,6 +85,10 @@ for migration in api/migrations/*.sql; do
     echo "  WARNING: $basename had errors"
   fi
 done
+
+# ─── Start containers (after migrations so schema is up to date) ─────────────
+echo "Restarting containers..."
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d api controller
 
 # ─── Health check ────────────────────────────────────────────────────────────
 echo "Waiting for services to become healthy..."

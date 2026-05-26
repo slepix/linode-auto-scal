@@ -223,23 +223,7 @@ curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/scale-up" \
 
 ### Scale Down by Amount
 
-Scale down requires specifying which instances to remove via `target_instance_ids`. The number of IDs must match `amount`:
-
 ```bash
-curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/scale-down" \
-  -H "Authorization: Bearer $AUTOSCALER_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "amount": 2,
-    "target_instance_ids": ["inst-abc123", "inst-def456"],
-    "reason": "traffic returned to baseline"
-  }'
-```
-
-If `target_instance_ids` is omitted, the controller falls back to the default strategy (newest-first: the most recently created non-protected instances are removed first).
-
-```bash
-# Fallback: remove 1 instance using newest-first strategy
 curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/scale-down" \
   -H "Authorization: Bearer $AUTOSCALER_KEY" \
   -H "Content-Type: application/json" \
@@ -409,23 +393,12 @@ curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/force-reconcile" \
 
 ### Force Delete an Instance
 
-Bypasses drain and cooldown -- triggers immediate deletion of the Linode:
+Bypasses drain and cooldown:
 
 ```bash
 curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/instances/inst-1749214021/force-delete" \
   -H "Authorization: Bearer $AUTOSCALER_KEY"
 ```
-
-### Purge an Instance from Tracking
-
-Removes an instance record from the database without touching the Linode VM. Use this for instances stuck in `draining` or `deleting` state where you intend to handle the VM manually:
-
-```bash
-curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/instances/inst-1749214021/purge" \
-  -H "Authorization: Bearer $AUTOSCALER_KEY"
-```
-
-> **Warning:** The Linode will continue running. You are responsible for manually deleting it.
 
 ### Clear Cooldown
 
@@ -544,14 +517,10 @@ class AutoscalerClient:
         r.raise_for_status()
         return r.json()
 
-    def scale_down(self, group_id: str, amount: int = 1, reason: str = "",
-                   target_instance_ids: list[str] | None = None) -> dict:
-        payload = {"amount": amount, "reason": reason}
-        if target_instance_ids:
-            payload["target_instance_ids"] = target_instance_ids
+    def scale_down(self, group_id: str, amount: int = 1, reason: str = "") -> dict:
         r = self.session.post(
             f"{self.base_url}/v1/groups/{group_id}/scale-down",
-            json=payload,
+            json={"amount": amount, "reason": reason},
         )
         r.raise_for_status()
         return r.json()

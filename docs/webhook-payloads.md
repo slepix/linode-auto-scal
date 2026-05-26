@@ -30,26 +30,6 @@ Authorization: Bearer <webhook_key>
 }
 ```
 
-### Targeted Scale Down
-
-When scaling down, you can specify exactly which instances to remove. The length of `target_instance_ids` must match `amount`:
-
-```json
-POST /v1/webhooks/scale
-Authorization: Bearer <webhook_key>
-
-{
-  "group_id": "web-prod",
-  "action": "scale_down",
-  "amount": 2,
-  "target_instance_ids": ["inst-abc123", "inst-def456"],
-  "source": "deployment-pipeline",
-  "reason": "removing old-version instances after canary"
-}
-```
-
-If `target_instance_ids` is omitted on a scale-down, the controller uses the default strategy (newest-first).
-
 Supported `action` values: `scale_up`, `scale_down`, `set_desired_count`
 
 ## Outbound Alert Webhooks

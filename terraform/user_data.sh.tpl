@@ -51,7 +51,7 @@ psql "$${DB_ROOT_URL}" -tc "SELECT 1 FROM pg_database WHERE datname = '${db_name
 psql "$${DB_ROOT_URL}" -tc "SELECT 1 FROM pg_roles WHERE rolname = '${db_app_user}'" | grep -q 1 || \
   psql "$${DB_ROOT_URL}" -c "CREATE USER ${db_app_user} WITH PASSWORD '${db_app_password}';"
 
-psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" <<GRANTSQL || true
+psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" <<'GRANTSQL'
 GRANT CONNECT ON DATABASE ${db_name} TO ${db_app_user};
 GRANT USAGE ON SCHEMA public TO ${db_app_user};
 GRANT CREATE ON SCHEMA public TO ${db_app_user};
@@ -61,18 +61,9 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO ${db_app_user};
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO ${db_app_user};
 GRANTSQL
 
-# Run all schema migrations in order (as root, since it creates the tables)
+# Run the schema migration as root (it creates tables the app user will then own)
 DB_APP_URL="postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require"
-echo "Running migrations from $REPO_DIR/api/migrations/..."
-for migration in $REPO_DIR/api/migrations/*.sql; do
-  [ -f "$migration" ] || continue
-  echo "Applying migration: $migration"
-  psql "$${DB_APP_URL}" -f "$migration"
-done
-
-# Transfer ownership of all tables to the app user so it can ALTER them later
-psql "postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require" -c \
-  "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO ${db_app_user}'; END LOOP; END \$\$;"
+psql "$${DB_APP_URL}" -f "$REPO_DIR/api/migrations/001_initial_schema.sql"
 
 # ─── Bootstrap admin API key ─────────────────────────────────────────────────
 ADMIN_API_KEY="sk-$(openssl rand -hex 32)"
@@ -95,7 +86,6 @@ unset PGPASSWORD
 cat > .env <<ENVEOF
 AUTOSCALER_SECRET_KEY=${autoscaler_secret_key}
 DATABASE_URL=postgresql://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require
-DATABASE_ROOT_URL=postgresql://${db_root_user}:${db_root_password}@${db_host}:${db_port}/${db_name}?sslmode=require
 CONTROLLER_DATABASE_URL=postgres://${db_app_user}:${db_app_password}@${db_host}:${db_port}/${db_name}?sslmode=require
 VITE_API_URL=http://$${PUBLIC_IP}:8000
 ENVEOF

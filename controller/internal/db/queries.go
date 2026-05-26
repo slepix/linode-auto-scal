@@ -8,8 +8,7 @@ import (
 
 func GetPendingScaleRequests(db *sql.DB) ([]ScaleRequest, error) {
 	rows, err := db.Query(`
-		SELECT id, group_id, request_type, desired_count, action, amount,
-		       target_instance_ids, status,
+		SELECT id, group_id, request_type, desired_count, action, amount, status,
 		       reason, source, idempotency_key, request_hash, created_by_api_key_id,
 		       dry_run, created_at, updated_at, completed_at
 		FROM scale_requests
@@ -27,9 +26,8 @@ func GetPendingScaleRequests(db *sql.DB) ([]ScaleRequest, error) {
 		var r ScaleRequest
 		err := rows.Scan(
 			&r.ID, &r.GroupID, &r.RequestType, &r.DesiredCount, &r.Action, &r.Amount,
-			&r.TargetInstanceIDs, &r.Status, &r.Reason, &r.Source, &r.IdempotencyKey,
-			&r.RequestHash, &r.CreatedByAPIKeyID, &r.DryRun, &r.CreatedAt, &r.UpdatedAt,
-			&r.CompletedAt,
+			&r.Status, &r.Reason, &r.Source, &r.IdempotencyKey, &r.RequestHash,
+			&r.CreatedByAPIKeyID, &r.DryRun, &r.CreatedAt, &r.UpdatedAt, &r.CompletedAt,
 		)
 		if err != nil {
 			return nil, err

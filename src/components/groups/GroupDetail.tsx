@@ -17,12 +17,6 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import Switch from '@mui/material/Switch';
-import Checkbox from '@mui/material/Checkbox';
-import List from '@mui/material/List';
-import ListItem from '@mui/material/ListItem';
-import ListItemButton from '@mui/material/ListItemButton';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemText from '@mui/material/ListItemText';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
@@ -38,7 +32,7 @@ import InstancesTable from '../instances/InstancesTable';
 import EventsTimeline from '../scaling/EventsTimeline';
 import CooldownStatus from '../scaling/CooldownStatus';
 import DriftList from '../scaling/DriftList';
-import type { Group, Instance } from '../../types';
+import type { Group } from '../../types';
 
 interface Props {
   groupId: string;
@@ -52,7 +46,6 @@ export default function GroupDetail({ groupId, group, onBack }: Props) {
   const [scaleError, setScaleError] = useState<string | null>(null);
   const [scaleSuccess, setScaleSuccess] = useState<string | null>(null);
   const [scaleDialogOpen, setScaleDialogOpen] = useState(false);
-  const [scaleDownDialogOpen, setScaleDownDialogOpen] = useState(false);
   const { status, loading: statusLoading, refetch } = useGroupStatus(groupId, 8000);
 
   const handleScaleUp = async () => {
@@ -69,8 +62,18 @@ export default function GroupDetail({ groupId, group, onBack }: Props) {
     }
   };
 
-  const handleScaleDown = () => {
-    setScaleDownDialogOpen(true);
+  const handleScaleDown = async () => {
+    setScaling(true);
+    setScaleError(null);
+    try {
+      await api.scaleDown(groupId, 1, 'manual scale-down from dashboard');
+      setScaleSuccess('Scale-down request submitted');
+      refetch();
+    } catch (e) {
+      setScaleError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setScaling(false);
+    }
   };
 
   const handleReconcile = async () => {
@@ -243,18 +246,6 @@ export default function GroupDetail({ groupId, group, onBack }: Props) {
         }}
         onError={(msg) => setScaleError(msg)}
       />
-
-      <ScaleDownDialog
-        open={scaleDownDialogOpen}
-        onClose={() => setScaleDownDialogOpen(false)}
-        groupId={groupId}
-        onSuccess={(msg) => {
-          setScaleSuccess(msg);
-          setScaleDownDialogOpen(false);
-          refetch();
-        }}
-        onError={(msg) => setScaleError(msg)}
-      />
     </Box>
   );
 }
@@ -332,116 +323,6 @@ function ScaleDialog({
         <Button onClick={onClose}>Cancel</Button>
         <Button variant="contained" onClick={handleSubmit} disabled={loading}>
           {loading ? 'Submitting...' : dryRun ? 'Preview' : 'Apply'}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-}
-
-function ScaleDownDialog({
-  open, onClose, groupId, onSuccess, onError
-}: {
-  open: boolean;
-  onClose: () => void;
-  groupId: string;
-  onSuccess: (msg: string) => void;
-  onError: (msg: string) => void;
-}) {
-  const [instances, setInstances] = useState<Instance[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [reason, setReason] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [fetchingInstances, setFetchingInstances] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setSelected([]);
-      setReason('');
-      setFetchingInstances(true);
-      api.getGroupInstances(groupId)
-        .then((all) => setInstances(all.filter((i) => i.status === 'active' && !i.protected)))
-        .catch(() => {})
-        .finally(() => setFetchingInstances(false));
-    }
-  }, [open, groupId]);
-
-  const toggle = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const handleSubmit = async () => {
-    if (selected.length === 0) return;
-    setLoading(true);
-    try {
-      await api.scaleDown(groupId, selected.length, reason || 'manual scale-down from dashboard', selected);
-      onSuccess(`Scale-down request submitted for ${selected.length} instance(s)`);
-    } catch (e) {
-      onError(e instanceof Error ? e.message : 'Failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Scale Down - Select Instances</DialogTitle>
-      <DialogContent>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          Select which instance(s) to remove. Protected instances are excluded.
-        </Typography>
-        {fetchingInstances ? (
-          <Typography color="text.secondary">Loading instances...</Typography>
-        ) : instances.length === 0 ? (
-          <Typography color="text.secondary">No eligible instances found.</Typography>
-        ) : (
-          <List dense sx={{ maxHeight: 300, overflow: 'auto' }}>
-            {instances.map((inst) => (
-              <ListItem key={inst.id} disablePadding>
-                <ListItemButton onClick={() => toggle(inst.id)} dense>
-                  <ListItemIcon sx={{ minWidth: 36 }}>
-                    <Checkbox
-                      edge="start"
-                      checked={selected.includes(inst.id)}
-                      disableRipple
-                      size="small"
-                    />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={inst.linode_label || inst.id.slice(0, 12)}
-                    secondary={`ID: ${inst.linode_id ?? '—'} · ${inst.vpc_ipv4 ?? inst.private_ipv4 ?? inst.public_ipv4 ?? '—'}`}
-                    slotProps={{ primary: { sx: { fontFamily: 'monospace', fontSize: '0.8rem' } } }}
-                  />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        )}
-        <TextField
-          fullWidth
-          label="Reason"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          size="small"
-          sx={{ mt: 2 }}
-          placeholder="Optional reason for scaling down"
-        />
-        {selected.length > 0 && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            {selected.length} instance(s) will be drained and destroyed.
-          </Alert>
-        )}
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button
-          variant="contained"
-          color="warning"
-          onClick={handleSubmit}
-          disabled={loading || selected.length === 0}
-        >
-          {loading ? 'Submitting...' : `Scale Down (${selected.length})`}
         </Button>
       </DialogActions>
     </Dialog>

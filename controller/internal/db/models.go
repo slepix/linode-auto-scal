@@ -56,23 +56,22 @@ type Instance struct {
 }
 
 type ScaleRequest struct {
-	ID                string
-	GroupID           string
-	RequestType       string
-	DesiredCount      sql.NullInt64
-	Action            sql.NullString
-	Amount            sql.NullInt64
-	TargetInstanceIDs sql.NullString
-	Status            string
-	Reason            sql.NullString
-	Source            sql.NullString
-	IdempotencyKey    sql.NullString
-	RequestHash       sql.NullString
+	ID               string
+	GroupID          string
+	RequestType      string
+	DesiredCount     sql.NullInt64
+	Action           sql.NullString
+	Amount           sql.NullInt64
+	Status           string
+	Reason           sql.NullString
+	Source           sql.NullString
+	IdempotencyKey   sql.NullString
+	RequestHash      sql.NullString
 	CreatedByAPIKeyID sql.NullString
-	DryRun            string
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	CompletedAt       sql.NullTime
+	DryRun           string
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	CompletedAt      sql.NullTime
 }
 
 type NodebalancerBinding struct {

@@ -3,6 +3,7 @@ package scaler
 import (
 	"database/sql"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -356,27 +357,78 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 		return err
 	}
 
-	// Filter out protected instances
-	var candidates []dbpkg.Instance
-	for _, inst := range activeInstances {
-		if !inst.Protected {
-			candidates = append(candidates, inst)
+	// Parse targeted instance IDs (Linode IDs) if specified
+	var targetLinodeIDs []int64
+	if req.InstanceIDsJSON.Valid && req.InstanceIDsJSON.String != "" {
+		if err := json.Unmarshal([]byte(req.InstanceIDsJSON.String), &targetLinodeIDs); err != nil {
+			log.Errorw("failed to parse instance_ids_json", "error", err)
+			dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "failed")
+			return fmt.Errorf("invalid instance_ids_json: %w", err)
 		}
 	}
 
-	// newest_first strategy - activeInstances is already ordered DESC by created_at
-	if len(candidates) < amount {
-		amount = len(candidates)
-	}
+	var toDelete []dbpkg.Instance
 
-	if len(candidates)-amount < group.MinInstances {
-		amount = len(candidates) - group.MinInstances
-	}
+	if len(targetLinodeIDs) > 0 {
+		// Targeted scale-down: select specific instances by Linode ID
+		targetSet := make(map[int64]bool, len(targetLinodeIDs))
+		for _, id := range targetLinodeIDs {
+			targetSet[id] = true
+		}
 
-	if amount <= 0 {
-		log.Infow("no instances eligible for scale-down (min_instances constraint)")
-		dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
-		return nil
+		for _, inst := range activeInstances {
+			if inst.LinodeID.Valid && targetSet[inst.LinodeID.Int64] {
+				if inst.Protected {
+					log.Warnw("skipping protected instance from targeted scale-down",
+						"instance_id", inst.ID, "linode_id", inst.LinodeID.Int64)
+					continue
+				}
+				toDelete = append(toDelete, inst)
+			}
+		}
+
+		if len(toDelete) == 0 {
+			log.Warnw("no matching active instances found for targeted scale-down",
+				"requested_linode_ids", targetLinodeIDs)
+			dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "failed")
+			return fmt.Errorf("no matching active instances found for the specified Linode IDs")
+		}
+
+		// Still respect min_instances
+		nonTargeted := len(activeInstances) - len(toDelete)
+		if nonTargeted < group.MinInstances {
+			allowed := len(activeInstances) - group.MinInstances
+			if allowed <= 0 {
+				log.Infow("targeted scale-down blocked by min_instances constraint")
+				dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
+				return nil
+			}
+			toDelete = toDelete[:allowed]
+		}
+	} else {
+		// Default behavior: newest-first strategy
+		var candidates []dbpkg.Instance
+		for _, inst := range activeInstances {
+			if !inst.Protected {
+				candidates = append(candidates, inst)
+			}
+		}
+
+		if len(candidates) < amount {
+			amount = len(candidates)
+		}
+
+		if len(candidates)-amount < group.MinInstances {
+			amount = len(candidates) - group.MinInstances
+		}
+
+		if amount <= 0 {
+			log.Infow("no instances eligible for scale-down (min_instances constraint)")
+			dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
+			return nil
+		}
+
+		toDelete = candidates[:amount]
 	}
 
 	token, err := decryptFernet(s.secretKey, group.EncryptedLinodeToken)
@@ -395,7 +447,6 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 		parallelism = nbCfg.Bindings[0].DrainParallelism
 	}
 
-	toDelete := candidates[:amount]
 	var successCount int64
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, parallelism)
@@ -421,7 +472,7 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 
 	if successCount == 0 {
 		dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "failed")
-		return fmt.Errorf("all %d scale-down attempts failed", amount)
+		return fmt.Errorf("all %d scale-down attempts failed", len(toDelete))
 	}
 
 	dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "succeeded")

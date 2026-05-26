@@ -95,6 +95,20 @@ export default function GroupDetail({ groupId, group, onBack }: Props) {
     }
   };
 
+  const handleScaleDownSelected = async (linodeIds: number[]) => {
+    setScaling(true);
+    setScaleError(null);
+    try {
+      await api.scaleDown(groupId, linodeIds.length, 'targeted scale-down from dashboard', linodeIds);
+      setScaleSuccess(`Scale-down request submitted for ${linodeIds.length} instance(s)`);
+      refetch();
+    } catch (e) {
+      setScaleError(e instanceof Error ? e.message : 'Failed');
+    } finally {
+      setScaling(false);
+    }
+  };
+
   useEffect(() => {
     if (scaleSuccess) {
       const t = setTimeout(() => setScaleSuccess(null), 4000);
@@ -229,7 +243,7 @@ export default function GroupDetail({ groupId, group, onBack }: Props) {
         </Tabs>
       </Box>
 
-      {tab === 0 && <InstancesTable groupId={groupId} />}
+      {tab === 0 && <InstancesTable groupId={groupId} onScaleDownSelected={handleScaleDownSelected} />}
       {tab === 1 && <EventsTimeline groupId={groupId} />}
       {tab === 2 && <CooldownStatus groupId={groupId} />}
       {tab === 3 && <DriftList groupId={groupId} />}

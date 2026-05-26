@@ -17,6 +17,7 @@ class ScaleRequest(Base):
     source = Column(String, nullable=True)
     idempotency_key = Column(String, nullable=True, index=True)
     request_hash = Column(String, nullable=True)
+    instance_ids_json = Column(Text, nullable=True)
     created_by_api_key_id = Column(String, nullable=True)
     dry_run = Column(String, nullable=False, default="false")
     created_at = Column(DateTime(timezone=True), server_default=func.now())

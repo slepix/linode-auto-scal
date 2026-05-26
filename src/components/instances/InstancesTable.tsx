@@ -7,6 +7,7 @@ import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Paper from '@mui/material/Paper';
 import Chip from '@mui/material/Chip';
+import Checkbox from '@mui/material/Checkbox';
 import Skeleton from '@mui/material/Skeleton';
 import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
@@ -23,6 +24,7 @@ import Stack from '@mui/material/Stack';
 import LockIcon from '@mui/icons-material/Lock';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyIcon from '@mui/icons-material/Key';
 import InputIcon from '@mui/icons-material/Input';
 import { api } from '../../api/client';
@@ -32,9 +34,10 @@ import type { Instance } from '../../types';
 
 interface Props {
   groupId: string;
+  onScaleDownSelected?: (linodeIds: number[]) => void;
 }
 
-export default function InstancesTable({ groupId }: Props) {
+export default function InstancesTable({ groupId, onScaleDownSelected }: Props) {
   const [instances, setInstances] = useState<Instance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +50,7 @@ export default function InstancesTable({ groupId }: Props) {
   const [importLoading, setImportLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<Instance | null>(null);
   const [purgeConfirm, setPurgeConfirm] = useState<Instance | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const fetchInstances = () => {
     api.getGroupInstances(groupId).then(setInstances).catch(() => {});
@@ -121,6 +125,10 @@ export default function InstancesTable({ groupId }: Props) {
     }
   };
 
+  const selectableInstances = instances.filter(
+    (i) => i.status === 'active' && i.linode_id != null && !i.protected
+  );
+
   if (loading) {
     return <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 1 }} />;
   }
@@ -137,7 +145,18 @@ export default function InstancesTable({ groupId }: Props) {
         </Alert>
       )}
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mb: 1 }}>
+        {selected.size > 0 && onScaleDownSelected && (
+          <Button
+            size="small"
+            color="warning"
+            variant="outlined"
+            startIcon={<KeyboardArrowDownIcon />}
+            onClick={() => onScaleDownSelected(Array.from(selected))}
+          >
+            Scale Down Selected ({selected.size})
+          </Button>
+        )}
         <Button size="small" startIcon={<InputIcon />} onClick={() => setImportOpen(true)}>
           Import Instance
         </Button>
@@ -152,6 +171,22 @@ export default function InstancesTable({ groupId }: Props) {
           <Table size="small">
             <TableHead>
               <TableRow>
+                {onScaleDownSelected && (
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      size="small"
+                      indeterminate={selected.size > 0 && selected.size < selectableInstances.length}
+                      checked={selectableInstances.length > 0 && selected.size === selectableInstances.length}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelected(new Set(selectableInstances.map((i) => i.linode_id!)));
+                        } else {
+                          setSelected(new Set());
+                        }
+                      }}
+                    />
+                  </TableCell>
+                )}
                 <TableCell>Label</TableCell>
                 <TableCell>Linode ID</TableCell>
                 <TableCell>Status</TableCell>
@@ -162,8 +197,29 @@ export default function InstancesTable({ groupId }: Props) {
               </TableRow>
             </TableHead>
             <TableBody>
-              {instances.map((inst) => (
-                <TableRow key={inst.id} hover>
+              {instances.map((inst) => {
+                const isSelectable = inst.status === 'active' && inst.linode_id != null && !inst.protected;
+                const isSelected = inst.linode_id != null && selected.has(inst.linode_id);
+                return (
+                <TableRow key={inst.id} hover selected={isSelected}>
+                  {onScaleDownSelected && (
+                    <TableCell padding="checkbox">
+                      <Checkbox
+                        size="small"
+                        checked={isSelected}
+                        disabled={!isSelectable}
+                        onChange={(e) => {
+                          const next = new Set(selected);
+                          if (e.target.checked) {
+                            next.add(inst.linode_id!);
+                          } else {
+                            next.delete(inst.linode_id!);
+                          }
+                          setSelected(next);
+                        }}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                       {inst.linode_label ?? inst.id.slice(0, 12)}
@@ -235,7 +291,8 @@ export default function InstancesTable({ groupId }: Props) {
                     </Stack>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         </TableContainer>

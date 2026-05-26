@@ -65,6 +65,7 @@ type ScaleRequest struct {
 	Status           string
 	Reason           sql.NullString
 	Source           sql.NullString
+	InstanceIDsJSON  sql.NullString
 	IdempotencyKey   sql.NullString
 	RequestHash      sql.NullString
 	CreatedByAPIKeyID sql.NullString

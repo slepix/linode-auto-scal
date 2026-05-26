@@ -68,6 +68,9 @@ def create_scale_request(
     if not dry_run:
         _check_concurrent(db, group_id)
 
+    instance_ids = payload.get("instance_ids")
+    instance_ids_json = json.dumps(instance_ids) if instance_ids else None
+
     req = ScaleRequest(
         id=uuid.uuid4().hex,
         group_id=group_id,
@@ -77,6 +80,7 @@ def create_scale_request(
         amount=payload.get("amount"),
         reason=payload.get("reason"),
         source=payload.get("source"),
+        instance_ids_json=instance_ids_json,
         idempotency_key=idempotency_key,
         request_hash=req_hash,
         created_by_api_key_id=api_key_id,

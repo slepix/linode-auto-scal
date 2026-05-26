@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -19,6 +19,7 @@ class ScaleUpRequest(BaseModel):
 class ScaleDownRequest(BaseModel):
     amount: int = 1
     reason: Optional[str] = None
+    instance_ids: Optional[List[int]] = None
 
 
 class WebhookScalePayload(BaseModel):
@@ -44,6 +45,7 @@ class ScaleRequestResponse(BaseModel):
     dry_run: str
     created_at: datetime
     updated_at: datetime
+    instance_ids_json: Optional[str] = None
     completed_at: Optional[datetime]
 
     class Config:

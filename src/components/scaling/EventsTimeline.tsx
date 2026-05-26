@@ -56,21 +56,39 @@ export default function EventsTimeline({ groupId }: Props) {
                 '& .MuiAlert-message': { width: '100%' },
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
-                  <Chip
-                    label={evt.event_type.replace(/_/g, ' ')}
-                    size="small"
-                    variant="outlined"
-                    sx={{ fontSize: '0.65rem', flexShrink: 0 }}
-                  />
-                  <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {evt.message ?? '—'}
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1, minWidth: 0 }}>
+                    <Chip
+                      label={evt.event_type.replace(/_/g, ' ')}
+                      size="small"
+                      variant="outlined"
+                      sx={{ fontSize: '0.65rem', flexShrink: 0 }}
+                    />
+                    <Typography variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {evt.message ?? '—'}
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
+                    {formatDateTime(evt.created_at)}
                   </Typography>
                 </Box>
-                <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0 }}>
-                  {formatDateTime(evt.created_at)}
-                </Typography>
+                {evt.reason && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, pl: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                      Reason: {evt.reason}
+                    </Typography>
+                    {evt.source && (
+                      <Chip
+                        label={evt.source}
+                        size="small"
+                        variant="filled"
+                        color="default"
+                        sx={{ fontSize: '0.6rem', height: 18 }}
+                      />
+                    )}
+                  </Box>
+                )}
               </Box>
             </Alert>
           </Box>

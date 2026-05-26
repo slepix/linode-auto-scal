@@ -126,18 +126,66 @@ def group_events(
     events = db.query(ScaleEvent).filter(
         ScaleEvent.group_id == group_id,
     ).order_by(desc(ScaleEvent.created_at)).offset(offset).limit(limit).all()
-    return [
-        {
+
+    # Collect scale_request IDs from metadata to look up reasons
+    request_ids: set = set()
+    for e in events:
+        if e.metadata_json:
+            try:
+                meta = json.loads(e.metadata_json)
+                if meta.get("request_id"):
+                    request_ids.add(meta["request_id"])
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+    # Also fetch recent scale requests for this group within the same timeframe
+    requests = db.query(ScaleRequest).filter(
+        ScaleRequest.group_id == group_id,
+    ).order_by(desc(ScaleRequest.created_at)).limit(limit).all()
+    request_map = {r.id: r for r in requests}
+
+    result = []
+    for e in events:
+        entry = {
             "id": e.id,
             "group_id": e.group_id,
             "instance_id": e.instance_id,
             "event_type": e.event_type,
             "severity": e.severity,
             "message": e.message,
+            "reason": None,
+            "source": None,
             "created_at": e.created_at,
         }
-        for e in events
-    ]
+        # Try to find related scale request for reason
+        if e.metadata_json:
+            try:
+                meta = json.loads(e.metadata_json)
+                req_id = meta.get("request_id")
+                if req_id and req_id in request_map:
+                    entry["reason"] = request_map[req_id].reason
+                    entry["source"] = request_map[req_id].source
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # For scale_up/scale_down events without metadata, try matching by timestamp
+        if not entry["reason"] and e.event_type in (
+            "scale_up_completed", "scale_down_completed",
+            "scale_up_batch_completed", "auto_replace_triggered",
+            "auto_scale_down_triggered",
+        ):
+            for r in requests:
+                if r.group_id == e.group_id and r.reason:
+                    req_time = r.created_at
+                    evt_time = e.created_at
+                    if req_time and evt_time:
+                        diff = abs((evt_time - req_time).total_seconds())
+                        if diff < 600:
+                            entry["reason"] = r.reason
+                            entry["source"] = r.source
+                            break
+        result.append(entry)
+
+    return result
 
 
 @router.get("/{group_id}/instances", response_model=List[InstanceResponse])

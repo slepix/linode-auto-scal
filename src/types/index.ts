@@ -175,6 +175,8 @@ export interface ScaleEvent {
   event_type: string;
   severity: string;
   message: string | null;
+  reason: string | null;
+  source: string | null;
   created_at: string;
 }
 

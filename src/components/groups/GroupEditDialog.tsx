@@ -16,8 +16,11 @@ import Alert from '@mui/material/Alert';
 import Chip from '@mui/material/Chip';
 import Box from '@mui/material/Box';
 import MenuItem from '@mui/material/MenuItem';
+import CircularProgress from '@mui/material/CircularProgress';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import { api } from '../../api/client';
+import type { MetricScalingConfig } from '../../types';
 import type { Group, GroupUpdate } from '../../types';
 
 interface Props {
@@ -119,6 +122,41 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
   const [metricScaleDownThreshold, setMetricScaleDownThreshold] = useState(group.metric_scaling_config?.rule?.scale_down_threshold ?? 20);
   const [metricScaleDownAmount, setMetricScaleDownAmount] = useState(group.metric_scaling_config?.rule?.scale_down_amount ?? 1);
   const [metricEvalWindow, setMetricEvalWindow] = useState(group.metric_scaling_config?.rule?.evaluation_window_seconds ?? 60);
+
+  // Metric test state
+  const [metricTesting, setMetricTesting] = useState(false);
+  const [metricTestResult, setMetricTestResult] = useState<{ success: boolean; value?: number | null; error?: string | null; raw_response?: string | null } | null>(null);
+
+  const handleTestMetric = async () => {
+    setMetricTesting(true);
+    setMetricTestResult(null);
+    try {
+      const config: MetricScalingConfig = {
+        enabled: metricEnabled,
+        source_type: metricSourceType,
+        endpoint: metricEndpoint,
+        auth_type: metricAuthType,
+        auth_header: metricAuthHeader || null,
+        auth_token_ref: metricAuthToken || null,
+        query: metricQuery,
+        value_path: metricValuePath,
+        poll_interval_seconds: metricPollInterval,
+        rule: {
+          scale_up_threshold: metricScaleUpThreshold,
+          scale_up_amount: metricScaleUpAmount,
+          scale_down_threshold: metricScaleDownThreshold,
+          scale_down_amount: metricScaleDownAmount,
+          evaluation_window_seconds: metricEvalWindow,
+        },
+      };
+      const result = await api.testMetric(group.group_id, config);
+      setMetricTestResult(result);
+    } catch (e) {
+      setMetricTestResult({ success: false, error: e instanceof Error ? e.message : 'Request failed' });
+    } finally {
+      setMetricTesting(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setError(null);
@@ -897,6 +935,61 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
                       size="small"
                       slotProps={{ htmlInput: { min: 1 } }}
                     />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={handleTestMetric}
+                        disabled={metricTesting || !metricEndpoint}
+                        startIcon={metricTesting ? <CircularProgress size={16} /> : <PlayArrowIcon />}
+                      >
+                        {metricTesting ? 'Fetching...' : 'Fetch Metrics'}
+                      </Button>
+                      <Typography variant="caption" color="text.secondary" sx={{ ml: 1.5 }}>
+                        Test the current configuration by fetching a live value
+                      </Typography>
+                      {metricTestResult && (
+                        <Box sx={{ mt: 1.5 }}>
+                          {metricTestResult.success ? (
+                            <Alert severity="success" variant="outlined" sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+                              <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                                Metric Value: {metricTestResult.value}
+                              </Typography>
+                              {metricTestResult.raw_response && (
+                                <Box
+                                  component="pre"
+                                  sx={{
+                                    mt: 1,
+                                    p: 1,
+                                    bgcolor: 'background.default',
+                                    borderRadius: 1,
+                                    fontSize: '0.75rem',
+                                    overflow: 'auto',
+                                    maxHeight: 120,
+                                    whiteSpace: 'pre-wrap',
+                                    wordBreak: 'break-all',
+                                  }}
+                                >
+                                  {(() => {
+                                    try {
+                                      return JSON.stringify(JSON.parse(metricTestResult.raw_response!), null, 2);
+                                    } catch {
+                                      return metricTestResult.raw_response;
+                                    }
+                                  })()}
+                                </Box>
+                              )}
+                            </Alert>
+                          ) : (
+                            <Alert severity="error" variant="outlined">
+                              {metricTestResult.error}
+                            </Alert>
+                          )}
+                        </Box>
+                      )}
+                    </Box>
                   </Grid>
                 </>
               )}

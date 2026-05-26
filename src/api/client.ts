@@ -11,6 +11,7 @@ import type {
   ApiKey,
   ApiKeyCreated,
   RootPasswordResponse,
+  MetricScalingConfig,
 } from '../types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -101,6 +102,12 @@ export const api = {
   createApiKey: (name: string, role: string) =>
     request<ApiKeyCreated>('POST', '/v1/api-keys', { name, role }),
   deleteApiKey: (id: string) => request<unknown>('DELETE', `/v1/api-keys/${id}`),
+
+  // Metric Testing
+  testMetric: (groupId: string, metricScaling: MetricScalingConfig) =>
+    request<{ success: boolean; value: number | null; error: string | null; raw_response: string | null }>(
+      'POST', `/v1/groups/${groupId}/test-metric`, { metric_scaling: metricScaling }
+    ),
 
   // System
   healthz: () => request<{ status: string; uptime_seconds: number }>('GET', '/healthz'),

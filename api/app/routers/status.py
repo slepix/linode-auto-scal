@@ -146,6 +146,13 @@ def group_events(
 
     result = []
     for e in events:
+        metadata = None
+        if e.metadata_json:
+            try:
+                metadata = json.loads(e.metadata_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
+
         entry = {
             "id": e.id,
             "group_id": e.group_id,
@@ -155,18 +162,15 @@ def group_events(
             "message": e.message,
             "reason": None,
             "source": None,
+            "metadata": metadata,
             "created_at": e.created_at,
         }
         # Try to find related scale request for reason
-        if e.metadata_json:
-            try:
-                meta = json.loads(e.metadata_json)
-                req_id = meta.get("request_id")
-                if req_id and req_id in request_map:
-                    entry["reason"] = request_map[req_id].reason
-                    entry["source"] = request_map[req_id].source
-            except (json.JSONDecodeError, TypeError):
-                pass
+        if metadata:
+            req_id = metadata.get("request_id")
+            if req_id and req_id in request_map:
+                entry["reason"] = request_map[req_id].reason
+                entry["source"] = request_map[req_id].source
         # For scale_up/scale_down events without metadata, try matching by timestamp
         if not entry["reason"] and e.event_type in (
             "scale_up_completed", "scale_down_completed",

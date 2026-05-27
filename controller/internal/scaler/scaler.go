@@ -28,6 +28,10 @@ func New(db *sql.DB, secretKey string, log *zap.SugaredLogger) *Scaler {
 }
 
 func (s *Scaler) emitEvent(groupID, instanceID, eventType, severity, message string) {
+	s.emitEventWithMeta(groupID, instanceID, eventType, severity, message, nil)
+}
+
+func (s *Scaler) emitEventWithMeta(groupID, instanceID, eventType, severity, message string, metadata map[string]interface{}) {
 	e := &dbpkg.ScaleEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		GroupID:   groupID,
@@ -37,6 +41,11 @@ func (s *Scaler) emitEvent(groupID, instanceID, eventType, severity, message str
 	}
 	if instanceID != "" {
 		e.InstanceID = sql.NullString{String: instanceID, Valid: true}
+	}
+	if metadata != nil {
+		if raw, err := json.Marshal(metadata); err == nil {
+			e.MetadataJSON = sql.NullString{String: string(raw), Valid: true}
+		}
 	}
 	if err := dbpkg.InsertScaleEvent(s.db, e); err != nil {
 		s.log.Warnw("failed to insert event", "error", err)
@@ -75,7 +84,18 @@ func (s *Scaler) ExecuteScaleUp(req *dbpkg.ScaleRequest, group *dbpkg.Group, amo
 			defer wg.Done()
 			if err := s.createSingleInstance(log, linodeClient, nbClient, group, bootCfg, networkCfg, nbCfg, tags, readinessCfg); err != nil {
 				log.Errorw("failed to create instance", "error", err, "instance_num", idx+1)
-				s.emitEvent(group.GroupID, "", "scale_failed", "critical", fmt.Sprintf("Scale-up failed: %v", err))
+				s.emitEventWithMeta(group.GroupID, "", "scale_failed", "critical",
+					fmt.Sprintf("Scale-up failed: %v", err),
+					map[string]interface{}{
+						"error":         err.Error(),
+						"phase":         "scale_up",
+						"instance_num":  idx + 1,
+						"total_batch":   amount,
+						"request_id":    req.ID,
+						"region":        group.Region,
+						"instance_type": group.Type,
+						"image":         group.Image,
+					})
 			} else {
 				atomic.AddInt64(&successCount, 1)
 			}
@@ -258,8 +278,25 @@ func (s *Scaler) createSingleInstance(
 	if readinessCfg != nil && primaryIP != "" {
 		if err := readiness.WaitForReady(readinessCfg, primaryIP); err != nil {
 			log.Warnw("readiness check failed, cleaning up", "error", err, "linode_id", created.ID)
-			s.emitEvent(group.GroupID, instanceID, "readiness_failed", "error",
-				fmt.Sprintf("Readiness checks failed after %d attempts: %v", readinessCfg.RetryCount, err))
+			meta := map[string]interface{}{
+				"error":           err.Error(),
+				"phase":           "readiness_check",
+				"linode_id":       created.ID,
+				"linode_label":    label,
+				"target_ip":       primaryIP,
+				"retry_count":     readinessCfg.RetryCount,
+				"timeout_seconds": readinessCfg.OverallTimeoutSeconds,
+			}
+			if readinessCfg.TCP != nil && readinessCfg.TCP.Enabled {
+				meta["tcp_port"] = readinessCfg.TCP.Port
+			}
+			if readinessCfg.HTTP != nil && readinessCfg.HTTP.Enabled {
+				meta["http_url"] = readinessCfg.HTTP.URL
+				meta["expected_status"] = readinessCfg.HTTP.ExpectedStatus
+			}
+			s.emitEventWithMeta(group.GroupID, instanceID, "readiness_failed", "error",
+				fmt.Sprintf("Readiness checks failed after %d attempts: %v", readinessCfg.RetryCount, err),
+				meta)
 			// Cleanup
 			linodeClient.DeleteLinode(created.ID)
 			dbpkg.MarkInstanceDeleted(s.db, instanceID)
@@ -298,8 +335,17 @@ func (s *Scaler) createSingleInstance(
 			)
 			if err != nil {
 				log.Errorw("failed to attach to nodebalancer", "error", err, "config_id", binding.ConfigID)
-				s.emitEvent(group.GroupID, instanceID, "nodebalancer_update_failed", "error",
-					fmt.Sprintf("Failed to attach to NB config %d: %v", binding.ConfigID, err))
+				s.emitEventWithMeta(group.GroupID, instanceID, "nodebalancer_update_failed", "error",
+					fmt.Sprintf("Failed to attach to NB config %d: %v", binding.ConfigID, err),
+					map[string]interface{}{
+						"error":           err.Error(),
+						"phase":           "nodebalancer_attach",
+						"nodebalancer_id": nbCfg.ID,
+						"config_id":       binding.ConfigID,
+						"linode_id":       created.ID,
+						"linode_label":    label,
+						"address":         address,
+					})
 				continue
 			}
 
@@ -443,8 +489,16 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 
 			if err := s.deleteInstance(log, linodeClient, nbClient, nbCfg, group.GroupID, &inst); err != nil {
 				log.Errorw("failed to delete instance", "error", err, "instance_id", inst.ID)
-				s.emitEvent(group.GroupID, inst.ID, "scale_failed", "error",
-					fmt.Sprintf("Scale-down failed for instance %s: %v", inst.ID, err))
+				s.emitEventWithMeta(group.GroupID, inst.ID, "scale_failed", "error",
+					fmt.Sprintf("Scale-down failed for instance %s: %v", inst.ID, err),
+					map[string]interface{}{
+						"error":        err.Error(),
+						"phase":        "scale_down",
+						"instance_id":  inst.ID,
+						"linode_id":    inst.LinodeID.Int64,
+						"linode_label": inst.LinodeLabel.String,
+						"request_id":   req.ID,
+					})
 			} else {
 				atomic.AddInt64(&successCount, 1)
 			}
@@ -492,8 +546,17 @@ func (s *Scaler) deleteInstance(
 			if b.NodeID.Valid {
 				if err := nbClient.UpdateNodeMode(b.NodebalancerID, b.ConfigID, b.NodeID.Int64, "drain"); err != nil {
 					log.Warnw("failed to set drain mode", "error", err, "node_id", b.NodeID.Int64)
-					s.emitEvent(groupID, inst.ID, "nodebalancer_update_failed", "warning",
-						fmt.Sprintf("Failed to drain NB node %d: %v", b.NodeID.Int64, err))
+					s.emitEventWithMeta(groupID, inst.ID, "nodebalancer_update_failed", "warning",
+						fmt.Sprintf("Failed to drain NB node %d: %v", b.NodeID.Int64, err),
+						map[string]interface{}{
+							"error":           err.Error(),
+							"phase":           "nodebalancer_drain",
+							"nodebalancer_id": b.NodebalancerID,
+							"config_id":       b.ConfigID,
+							"node_id":         b.NodeID.Int64,
+							"instance_id":     inst.ID,
+							"linode_id":       inst.LinodeID.Int64,
+						})
 				} else {
 					dbpkg.UpdateNodebalancerBindingMode(s.db, b.ID, "drain")
 				}

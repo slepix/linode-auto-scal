@@ -2,6 +2,7 @@ package reconciler
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -32,8 +33,12 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 	token, err := scaler.Decrypt(r.secretKey, group.EncryptedLinodeToken)
 	if err != nil {
 		log.Errorw("failed to decrypt token for reconciliation", "error", err)
-		r.emitEvent(group.GroupID, "", "reconcile_failed", "error",
-			fmt.Sprintf("Failed to decrypt token: %v", err))
+		r.emitEventWithMeta(group.GroupID, "", "reconcile_failed", "error",
+			fmt.Sprintf("Failed to decrypt token: %v", err),
+			map[string]interface{}{
+				"error": err.Error(),
+				"phase": "token_decryption",
+			})
 		return
 	}
 
@@ -44,8 +49,12 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 	linodes, err := linodeClient.ListLinodes(requiredTags)
 	if err != nil {
 		log.Errorw("failed to list linodes for reconciliation", "error", err)
-		r.emitEvent(group.GroupID, "", "reconcile_failed", "error",
-			fmt.Sprintf("Failed to list linodes: %v", err))
+		r.emitEventWithMeta(group.GroupID, "", "reconcile_failed", "error",
+			fmt.Sprintf("Failed to list linodes: %v", err),
+			map[string]interface{}{
+				"error": err.Error(),
+				"phase": "linode_api_list",
+			})
 		return
 	}
 
@@ -227,6 +236,10 @@ func (r *Reconciler) maybeQueueScaleDown(group *dbpkg.Group, log *zap.SugaredLog
 }
 
 func (r *Reconciler) emitEvent(groupID, instanceID, eventType, severity, message string) {
+	r.emitEventWithMeta(groupID, instanceID, eventType, severity, message, nil)
+}
+
+func (r *Reconciler) emitEventWithMeta(groupID, instanceID, eventType, severity, message string, metadata map[string]interface{}) {
 	e := &dbpkg.ScaleEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		GroupID:   groupID,
@@ -236,6 +249,11 @@ func (r *Reconciler) emitEvent(groupID, instanceID, eventType, severity, message
 	}
 	if instanceID != "" {
 		e.InstanceID = sql.NullString{String: instanceID, Valid: true}
+	}
+	if metadata != nil {
+		if raw, err := json.Marshal(metadata); err == nil {
+			e.MetadataJSON = sql.NullString{String: string(raw), Valid: true}
+		}
 	}
 	dbpkg.InsertScaleEvent(r.db, e)
 }

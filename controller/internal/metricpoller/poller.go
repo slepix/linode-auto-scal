@@ -2,6 +2,7 @@ package metricpoller
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -118,8 +119,15 @@ func (p *Poller) pollGroup(groupID string, configJSON sql.NullString) {
 	value, err := FetchMetricValue(cfg)
 	if err != nil {
 		p.log.Warnw("metric fetch failed", "group_id", groupID, "source", cfg.SourceType, "error", err)
-		p.emitEvent(groupID, "metric_fetch_failed", "warning",
-			fmt.Sprintf("Failed to fetch metric from %s: %v", cfg.SourceType, err))
+		p.emitEventWithMeta(groupID, "metric_fetch_failed", "warning",
+			fmt.Sprintf("Failed to fetch metric from %s: %v", cfg.SourceType, err),
+			map[string]interface{}{
+				"error":       err.Error(),
+				"phase":       "metric_fetch",
+				"source_type": cfg.SourceType,
+				"endpoint":    cfg.Endpoint,
+				"query":       cfg.Query,
+			})
 		return
 	}
 
@@ -189,12 +197,21 @@ func (p *Poller) submitScaleRequest(groupID, action string, amount int, reason s
 }
 
 func (p *Poller) emitEvent(groupID, eventType, severity, message string) {
+	p.emitEventWithMeta(groupID, eventType, severity, message, nil)
+}
+
+func (p *Poller) emitEventWithMeta(groupID, eventType, severity, message string, metadata map[string]interface{}) {
 	e := &dbpkg.ScaleEvent{
 		ID:        fmt.Sprintf("evt-%d", time.Now().UnixNano()),
 		GroupID:   groupID,
 		EventType: eventType,
 		Severity:  severity,
 		Message:   sql.NullString{String: message, Valid: true},
+	}
+	if metadata != nil {
+		if raw, err := json.Marshal(metadata); err == nil {
+			e.MetadataJSON = sql.NullString{String: string(raw), Valid: true}
+		}
 	}
 	dbpkg.InsertScaleEvent(p.db, e)
 }

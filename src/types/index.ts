@@ -202,6 +202,7 @@ export interface ScaleEvent {
   message: string | null;
   reason: string | null;
   source: string | null;
+  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 

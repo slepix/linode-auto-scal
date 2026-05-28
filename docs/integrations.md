@@ -293,31 +293,55 @@ For scale-down, configure a separate contact point with:
 
 ## Prometheus (Scraping Metrics)
 
-The autoscaler exposes Prometheus-compatible metrics at `/metrics`.
+The autoscaler exposes Prometheus-compatible metrics from two endpoints:
+
+- **API** (`:8000/metrics`) -- gauges refreshed from the database on each scrape
+- **Go Controller** (`:9090/metrics`) -- counters and histograms recorded during operations
 
 ### prometheus.yml
 
 ```yaml
 scrape_configs:
-  - job_name: "linode-autoscaler"
+  - job_name: "linode-autoscaler-api"
     scrape_interval: 30s
     static_configs:
       - targets: ["autoscaler.internal:8000"]
+    metrics_path: /metrics
+
+  - job_name: "linode-autoscaler-controller"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["autoscaler.internal:9090"]
     metrics_path: /metrics
 ```
 
 ### Available Metrics
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `autoscaler_groups_total` | Gauge | Total number of groups |
-| `autoscaler_instances_total` | Gauge | Total instances across all groups |
-| `autoscaler_instances_active` | Gauge | Currently active instances |
-| `autoscaler_scale_requests_total` | Counter | Scale requests by group/type/status |
-| `autoscaler_scale_failures_total` | Counter | Failed scale operations |
-| `autoscaler_drift_records_total` | Gauge | Active drift records |
-| `autoscaler_linode_api_errors_total` | Counter | Linode API errors |
-| `autoscaler_reconciliation_duration_seconds` | Histogram | Reconciliation loop timing |
+**Gauges (API + Controller)**
+
+| Metric | Description |
+|--------|-------------|
+| `autoscaler_groups_total` | Total number of groups |
+| `autoscaler_instances_total` | Total instances across all groups |
+| `autoscaler_instances_active` | Currently active instances |
+| `autoscaler_drift_records_total` | Open drift records |
+| `autoscaler_scale_requests_succeeded_total` | Succeeded scale requests (API only, from DB) |
+| `autoscaler_scale_requests_failed_total` | Failed scale requests (API only, from DB) |
+
+**Counters (Controller only)**
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `autoscaler_scale_requests_total` | `group_id`, `type`, `status` | Scale request outcomes |
+| `autoscaler_scale_failures_total` | `group_id` | Failed scale operations |
+| `autoscaler_linode_api_errors_total` | `group_id`, `operation` | Linode API call failures |
+| `autoscaler_nodebalancer_update_errors_total` | `group_id` | NodeBalancer operation failures |
+
+**Histograms (Controller only)**
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `autoscaler_reconciliation_duration_seconds` | `group_id` | Reconciliation loop timing |
 
 ### Example PromQL Queries
 
@@ -333,6 +357,12 @@ histogram_quantile(0.99, rate(autoscaler_reconciliation_duration_seconds_bucket[
 
 # Scale requests per minute
 rate(autoscaler_scale_requests_total[5m]) * 60
+
+# Linode API error rate by operation
+rate(autoscaler_linode_api_errors_total[5m])
+
+# NodeBalancer errors
+rate(autoscaler_nodebalancer_update_errors_total[5m])
 ```
 
 ### Grafana Dashboard
@@ -343,6 +373,7 @@ Import these panels for a complete autoscaler dashboard:
 - **Scale Activity**: `rate(autoscaler_scale_requests_total[5m])` stacked by `type`
 - **Failure Rate**: `rate(autoscaler_scale_failures_total[5m])`
 - **Reconciliation Health**: `histogram_quantile(0.99, ...)`
+- **API Errors**: `rate(autoscaler_linode_api_errors_total[5m])` by `operation`
 
 ---
 

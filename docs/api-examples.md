@@ -241,6 +241,46 @@ curl -X DELETE "$AUTOSCALER_URL/v1/groups/web-prod?force=true" \
   -H "Authorization: Bearer $AUTOSCALER_KEY"
 ```
 
+### Export All Groups
+
+The dashboard provides an **Export** button that downloads all group configurations as a JSON file. The exported file excludes:
+- Internal database IDs
+- Timestamps (`created_at`, `updated_at`)
+- Linode API tokens (sensitive, never exported)
+
+The exported JSON is an array of group objects:
+
+```json
+[
+  {
+    "group_id": "web-prod",
+    "enabled": true,
+    "region": "eu-central",
+    "type": "g6-standard-2",
+    "image": "linode/ubuntu24.04",
+    "min_instances": 2,
+    "max_instances": 10,
+    "desired_count": 3,
+    "max_scale_step": 3,
+    "label_prefix": "web-prod",
+    "protected_tag": "autoscaler:protected",
+    "nodebalancer_id": 55555,
+    "network_config": { "mode": "vpc_ipv4", "vpc_id": 12345, "subnet_id": 67890 },
+    "cooldown_config": { "scale_up_seconds": 120, "scale_down_seconds": 300 }
+  }
+]
+```
+
+### Import Groups from JSON
+
+The dashboard provides an **Import** button that accepts a previously exported JSON file. During import:
+1. Select the exported `.json` file
+2. Provide a Linode API token (applied to all imported groups)
+3. Each group is created via the API sequentially
+4. Progress and per-group success/failure is reported
+
+Groups that already exist (matching `group_id`) will fail with a conflict error -- delete or rename existing groups before re-importing.
+
 ---
 
 ## Scaling Operations

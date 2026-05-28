@@ -50,6 +50,7 @@ The Linode Instance Autoscaler is a self-hosted, API-first autoscaling system fo
 - Emits structured events to `scale_events` table
 - Sends outbound alert webhooks on failures
 - Exposes Prometheus metrics on :9090
+- Records operational metrics: scale request outcomes, reconciliation duration, Linode API errors, NodeBalancer update errors
 
 ### PostgreSQL (Linode Managed PostgreSQL v2 / Docker for local dev)
 - Single source of truth for all state
@@ -83,3 +84,38 @@ The Linode Instance Autoscaler is a self-hosted, API-first autoscaling system fo
 4. Set NodeBalancer node mode to `drain`
 5. Wait `drain_wait_seconds`
 6. Delete NB node, delete Linode, mark instance deleted
+
+## Prometheus Metrics
+
+Both the API (`:8000/metrics`) and Go controller (`:9090/metrics`) expose Prometheus-compatible metrics.
+
+### Gauges (refreshed from DB)
+
+| Metric | Description |
+|--------|-------------|
+| `autoscaler_groups_total` | Total number of active groups |
+| `autoscaler_instances_total` | Total tracked instances (non-deleted) |
+| `autoscaler_instances_active` | Instances in `active` status |
+| `autoscaler_drift_records_total` | Open drift records |
+
+### Counters (Go controller only)
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `autoscaler_scale_requests_total` | `group_id`, `type`, `status` | Scale request outcomes (succeeded/failed) |
+| `autoscaler_scale_failures_total` | `group_id` | Total scale operation failures |
+| `autoscaler_linode_api_errors_total` | `group_id`, `operation` | Linode API call failures (create, delete, list) |
+| `autoscaler_nodebalancer_update_errors_total` | `group_id` | NodeBalancer attach/drain/delete failures |
+
+### Histograms (Go controller only)
+
+| Metric | Labels | Description |
+|--------|--------|-------------|
+| `autoscaler_reconciliation_duration_seconds` | `group_id` | Time spent in each reconciliation cycle |
+
+### API-side gauges (`:8000/metrics`)
+
+| Metric | Description |
+|--------|-------------|
+| `autoscaler_scale_requests_succeeded_total` | Count of succeeded scale requests (from DB) |
+| `autoscaler_scale_requests_failed_total` | Count of failed scale requests (from DB) |

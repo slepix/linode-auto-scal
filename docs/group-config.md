@@ -128,6 +128,17 @@ curl -X PATCH "$AUTOSCALER_URL/v1/groups/web-prod" \
 
 ---
 
+## Export / Import
+
+Groups can be exported and imported via the dashboard UI:
+
+- **Export**: Downloads all groups as a JSON file. Excludes internal IDs, timestamps, and Linode tokens. Useful for backups, environment cloning, or sharing configurations.
+- **Import**: Upload a previously exported JSON file and supply a Linode API token. Each group is created sequentially. All configuration (network, nodebalancer, boot, readiness, cooldowns, reconciliation, alerting, metric scaling) is preserved.
+
+The exported format uses the same field names returned by `GET /v1/groups` (e.g., `network_config`, `cooldown_config`), minus `id`, `created_at`, and `updated_at`.
+
+---
+
 ## Key Fields
 
 | Field | Description |

@@ -190,8 +190,7 @@ export default function InstancesTable({ groupId, onScaleDownSelected }: Props) 
                 <TableCell>Label</TableCell>
                 <TableCell>Linode ID</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Internal IP</TableCell>
-                <TableCell>External IP</TableCell>
+                <TableCell>IP Address</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Flags</TableCell>
                 <TableCell align="right">Actions</TableCell>
@@ -246,15 +245,15 @@ export default function InstancesTable({ groupId, onScaleDownSelected }: Props) 
                           {inst.private_ipv4}
                         </Typography>
                       )}
-                      {!inst.vpc_ipv4 && !inst.private_ipv4 && (
+                      {inst.public_ipv4 && (
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.73rem' }} color="text.secondary">
+                          {inst.public_ipv4}
+                        </Typography>
+                      )}
+                      {!inst.vpc_ipv4 && !inst.private_ipv4 && !inst.public_ipv4 && (
                         <Typography variant="body2" color="text.secondary">—</Typography>
                       )}
                     </Box>
-                  </TableCell>
-                  <TableCell>
-                    <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.73rem' }} color="text.secondary">
-                      {inst.public_ipv4 ?? '—'}
-                    </Typography>
                   </TableCell>
                   <TableCell>
                     <Typography variant="caption" color="text.secondary">

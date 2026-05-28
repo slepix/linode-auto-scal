@@ -190,7 +190,8 @@ export default function InstancesTable({ groupId, onScaleDownSelected }: Props) 
                 <TableCell>Label</TableCell>
                 <TableCell>Linode ID</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>IP</TableCell>
+                <TableCell>Internal IP</TableCell>
+                <TableCell>External IP</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Flags</TableCell>
                 <TableCell align="right">Actions</TableCell>
@@ -234,8 +235,25 @@ export default function InstancesTable({ groupId, onScaleDownSelected }: Props) 
                     <StatusChip status={inst.status} />
                   </TableCell>
                   <TableCell>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                      {inst.vpc_ipv4 && (
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.73rem' }} color="text.primary">
+                          {inst.vpc_ipv4}
+                        </Typography>
+                      )}
+                      {inst.private_ipv4 && (
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.73rem' }} color="text.secondary">
+                          {inst.private_ipv4}
+                        </Typography>
+                      )}
+                      {!inst.vpc_ipv4 && !inst.private_ipv4 && (
+                        <Typography variant="body2" color="text.secondary">—</Typography>
+                      )}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
                     <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.73rem' }} color="text.secondary">
-                      {inst.vpc_ipv4 ?? inst.private_ipv4 ?? inst.public_ipv4 ?? '—'}
+                      {inst.public_ipv4 ?? '—'}
                     </Typography>
                   </TableCell>
                   <TableCell>

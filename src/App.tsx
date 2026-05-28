@@ -6,6 +6,9 @@ import Container from '@mui/material/Container';
 import Typography from '@mui/material/Typography';
 import Toolbar from '@mui/material/Toolbar';
 import Alert from '@mui/material/Alert';
+import Button from '@mui/material/Button';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import FileUploadIcon from '@mui/icons-material/FileUpload';
 import theme from './theme';
 import { api } from './api/client';
 import { useGroups } from './hooks/useGroups';
@@ -16,6 +19,7 @@ import GroupsGrid from './components/dashboard/GroupsGrid';
 import GroupDetail from './components/groups/GroupDetail';
 import GroupCreateDialog from './components/groups/GroupCreateDialog';
 import GroupEditDialog from './components/groups/GroupEditDialog';
+import GroupImportDialog from './components/groups/GroupImportDialog';
 import ApiKeysPage from './components/apikeys/ApiKeysPage';
 import type { GroupStatus, Group } from './types';
 
@@ -27,6 +31,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [editGroup, setEditGroup] = useState<Group | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [apiStatus, setApiStatus] = useState<'ok' | 'error' | 'unknown'>('unknown');
   const [statuses, setStatuses] = useState<Record<string, GroupStatus>>({});
   const { groups, loading: groupsLoading, error: groupsError, refetch: refetchGroups } = useGroups(20000);
@@ -79,6 +84,20 @@ export default function App() {
     setSelectedGroup(null);
   };
 
+  const handleExport = () => {
+    const exportData = groups.map((g) => {
+      const { id: _id, created_at: _ca, updated_at: _ua, ...config } = g;
+      return config;
+    });
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `groups-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
@@ -115,8 +134,25 @@ export default function App() {
               <SystemOverview groups={groups} statuses={statuses} />
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
                 <Typography variant="h5">Scaling Groups</Typography>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  <Typography variant="caption" color="text.secondary">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<FileDownloadIcon />}
+                    onClick={handleExport}
+                    disabled={!groups.length}
+                  >
+                    Export
+                  </Button>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    startIcon={<FileUploadIcon />}
+                    onClick={() => setImportOpen(true)}
+                  >
+                    Import
+                  </Button>
+                  <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
                     {groups.length} group{groups.length !== 1 ? 's' : ''}
                   </Typography>
                 </Box>
@@ -179,6 +215,15 @@ export default function App() {
             }}
           />
         )}
+
+        <GroupImportDialog
+          open={importOpen}
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            setImportOpen(false);
+            refetchGroups();
+          }}
+        />
       </Box>
     </ThemeProvider>
   );

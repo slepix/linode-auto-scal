@@ -12,6 +12,7 @@ import (
 
 	dbpkg "github.com/linode-instance-autoscaler/controller/internal/db"
 	"github.com/linode-instance-autoscaler/controller/internal/linode"
+	"github.com/linode-instance-autoscaler/controller/internal/metrics"
 	"github.com/linode-instance-autoscaler/controller/internal/nodebalancer"
 	"github.com/linode-instance-autoscaler/controller/internal/readiness"
 	"go.uber.org/zap"
@@ -208,6 +209,7 @@ func (s *Scaler) createSingleInstance(
 	log.Infow("creating linode", "label", label)
 	created, err := linodeClient.CreateLinode(createReq)
 	if err != nil {
+		metrics.LinodeAPIErrorsTotal.WithLabelValues(group.GroupID, "create_instance").Inc()
 		dbpkg.UpdateInstanceStatus(s.db, instanceID, "failed")
 		return fmt.Errorf("create linode: %w", err)
 	}
@@ -334,6 +336,7 @@ func (s *Scaler) createSingleInstance(
 				},
 			)
 			if err != nil {
+				metrics.NodebalancerUpdateErrorsTotal.WithLabelValues(group.GroupID).Inc()
 				log.Errorw("failed to attach to nodebalancer", "error", err, "config_id", binding.ConfigID)
 				s.emitEventWithMeta(group.GroupID, instanceID, "nodebalancer_update_failed", "error",
 					fmt.Sprintf("Failed to attach to NB config %d: %v", binding.ConfigID, err),
@@ -545,6 +548,7 @@ func (s *Scaler) deleteInstance(
 		for _, b := range bindings {
 			if b.NodeID.Valid {
 				if err := nbClient.UpdateNodeMode(b.NodebalancerID, b.ConfigID, b.NodeID.Int64, "drain"); err != nil {
+					metrics.NodebalancerUpdateErrorsTotal.WithLabelValues(groupID).Inc()
 					log.Warnw("failed to set drain mode", "error", err, "node_id", b.NodeID.Int64)
 					s.emitEventWithMeta(groupID, inst.ID, "nodebalancer_update_failed", "warning",
 						fmt.Sprintf("Failed to drain NB node %d: %v", b.NodeID.Int64, err),
@@ -581,6 +585,7 @@ func (s *Scaler) deleteInstance(
 	dbpkg.UpdateInstanceStatus(s.db, inst.ID, "deleting")
 	if inst.LinodeID.Valid {
 		if err := linodeClient.DeleteLinode(inst.LinodeID.Int64); err != nil {
+			metrics.LinodeAPIErrorsTotal.WithLabelValues(groupID, "delete_instance").Inc()
 			log.Errorw("failed to delete linode", "error", err, "linode_id", inst.LinodeID.Int64)
 			return fmt.Errorf("delete linode %d: %w", inst.LinodeID.Int64, err)
 		}

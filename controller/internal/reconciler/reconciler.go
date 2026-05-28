@@ -8,6 +8,7 @@ import (
 
 	dbpkg "github.com/linode-instance-autoscaler/controller/internal/db"
 	"github.com/linode-instance-autoscaler/controller/internal/linode"
+	"github.com/linode-instance-autoscaler/controller/internal/metrics"
 	"github.com/linode-instance-autoscaler/controller/internal/scaler"
 	"go.uber.org/zap"
 )
@@ -48,6 +49,7 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 	// Get Linodes matching group tags
 	linodes, err := linodeClient.ListLinodes(requiredTags)
 	if err != nil {
+		metrics.LinodeAPIErrorsTotal.WithLabelValues(group.GroupID, "list_instances").Inc()
 		log.Errorw("failed to list linodes for reconciliation", "error", err)
 		r.emitEventWithMeta(group.GroupID, "", "reconcile_failed", "error",
 			fmt.Sprintf("Failed to list linodes: %v", err),
@@ -119,6 +121,7 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 	}
 
 	elapsed := time.Since(start).Seconds()
+	metrics.ReconciliationDuration.WithLabelValues(group.GroupID).Observe(elapsed)
 	log.Infow("reconciliation complete", "duration_seconds", elapsed)
 }
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from fastapi.responses import PlainTextResponse
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Counter, Gauge, Histogram
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST, Gauge
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 import time
@@ -9,16 +9,13 @@ from ..db.base import get_db
 
 router = APIRouter(tags=["System"])
 
-# Prometheus metrics
+# Prometheus metrics (gauges refreshed from DB on each scrape)
 groups_total = Gauge("autoscaler_groups_total", "Total number of groups")
 instances_total = Gauge("autoscaler_instances_total", "Total number of instances tracked")
 instances_active = Gauge("autoscaler_instances_active", "Active instances")
-scale_requests_total = Counter("autoscaler_scale_requests_total", "Total scale requests", ["group_id", "type", "status"])
-scale_failures_total = Counter("autoscaler_scale_failures_total", "Scale failures", ["group_id"])
+scale_requests_succeeded = Gauge("autoscaler_scale_requests_succeeded_total", "Succeeded scale requests")
+scale_requests_failed = Gauge("autoscaler_scale_requests_failed_total", "Failed scale requests")
 drift_records_total = Gauge("autoscaler_drift_records_total", "Open drift records")
-linode_api_errors_total = Counter("autoscaler_linode_api_errors_total", "Linode API errors", ["group_id", "operation"])
-nodebalancer_update_errors_total = Counter("autoscaler_nodebalancer_update_errors_total", "NB update errors", ["group_id"])
-reconciliation_duration = Histogram("autoscaler_reconciliation_duration_seconds", "Reconciliation duration", ["group_id"])
 
 _start_time = time.time()
 
@@ -35,6 +32,12 @@ def _refresh_gauges(db: Session) -> None:
     )
     drift_records_total.set(
         db.execute(text("SELECT COUNT(*) FROM drift_records WHERE status = 'open'")).scalar() or 0
+    )
+    scale_requests_succeeded.set(
+        db.execute(text("SELECT COUNT(*) FROM scale_requests WHERE status = 'succeeded'")).scalar() or 0
+    )
+    scale_requests_failed.set(
+        db.execute(text("SELECT COUNT(*) FROM scale_requests WHERE status = 'failed'")).scalar() or 0
     )
 
 

@@ -199,6 +199,8 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 
 			if err := s.ExecuteScaleUp(req, group, batch); err != nil {
 				log.Errorw("scale-up batch failed", "error", err, "batch_size", batch)
+				metrics.ScaleRequestsTotal.WithLabelValues(req.GroupID, "scale_up", "failed").Inc()
+				metrics.ScaleFailuresTotal.WithLabelValues(req.GroupID).Inc()
 				if !anySuccess {
 					s.FailScaleUp(req, req.GroupID)
 					return
@@ -208,10 +210,15 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 			anySuccess = true
 			remaining -= batch
 		}
+		metrics.ScaleRequestsTotal.WithLabelValues(req.GroupID, "scale_up", "succeeded").Inc()
 		s.FinalizeScaleUp(req, req.GroupID)
 	} else if action == "scale_down" {
 		if err := s.ExecuteScaleDown(req, group, amount); err != nil {
 			log.Errorw("scale-down failed", "error", err)
+			metrics.ScaleRequestsTotal.WithLabelValues(req.GroupID, "scale_down", "failed").Inc()
+			metrics.ScaleFailuresTotal.WithLabelValues(req.GroupID).Inc()
+		} else {
+			metrics.ScaleRequestsTotal.WithLabelValues(req.GroupID, "scale_down", "succeeded").Inc()
 		}
 	}
 }

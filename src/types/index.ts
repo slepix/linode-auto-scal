@@ -238,6 +238,7 @@ export interface ApiKey {
   name: string;
   role: string;
   enabled: boolean;
+  allowed_groups: string[] | null;
   created_at: string;
   last_used_at: string | null;
 }

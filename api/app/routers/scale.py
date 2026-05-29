@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, Header
 from sqlalchemy.orm import Session
 from typing import Optional
 from ..db.base import get_db
-from ..middleware.auth import require_permission
+from ..middleware.auth import require_permission, check_group_access
 from ..schemas.scale import ScaleRequest, ScaleUpRequest, ScaleDownRequest, ScaleRequestResponse
 from ..services.scale_service import create_scale_request
 
@@ -18,6 +18,7 @@ def scale_group(
     db: Session = Depends(get_db),
     api_key=Depends(require_permission("scale")),
 ):
+    check_group_access(api_key, group_id)
     req = create_scale_request(
         db, group_id, "scale",
         payload.model_dump(exclude_none=True),
@@ -34,6 +35,7 @@ def scale_up_group(
     db: Session = Depends(get_db),
     api_key=Depends(require_permission("scale")),
 ):
+    check_group_access(api_key, group_id)
     req = create_scale_request(
         db, group_id, "scale_up",
         {"action": "scale_up", "amount": payload.amount, "reason": payload.reason},
@@ -50,6 +52,7 @@ def scale_down_group(
     db: Session = Depends(get_db),
     api_key=Depends(require_permission("scale")),
 ):
+    check_group_access(api_key, group_id)
     request_payload = {
         "action": "scale_down",
         "amount": payload.amount,

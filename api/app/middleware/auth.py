@@ -1,3 +1,4 @@
+import json
 from fastapi import HTTPException, Security, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -36,6 +37,29 @@ def _get_api_key(credentials: HTTPAuthorizationCredentials, db: Session) -> ApiK
     )
     db.commit()
     return api_key
+
+
+def get_allowed_groups(api_key: ApiKey) -> list[str] | None:
+    if api_key.allowed_groups_json is None:
+        return None
+    try:
+        groups = json.loads(api_key.allowed_groups_json)
+        if isinstance(groups, list):
+            return groups
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
+def check_group_access(api_key: ApiKey, group_id: str) -> None:
+    allowed = get_allowed_groups(api_key)
+    if allowed is None:
+        return
+    if group_id not in allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"API key does not have access to group '{group_id}'"
+        )
 
 
 def require_permission(permission: str):

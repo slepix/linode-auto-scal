@@ -24,12 +24,13 @@ import FormControl from '@mui/material/FormControl';
 import InputLabel from '@mui/material/InputLabel';
 import Skeleton from '@mui/material/Skeleton';
 import Stack from '@mui/material/Stack';
+import Autocomplete from '@mui/material/Autocomplete';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { api } from '../../api/client';
 import { formatRelative } from '../../utils/format';
-import type { ApiKey, ApiKeyCreated } from '../../types';
+import type { ApiKey, ApiKeyCreated, Group } from '../../types';
 
 const ROLE_COLORS: Record<string, 'error' | 'warning' | 'info' | 'success'> = {
   admin: 'error',
@@ -99,6 +100,7 @@ export default function ApiKeysPage() {
               <TableRow>
                 <TableCell>Name</TableCell>
                 <TableCell>Role</TableCell>
+                <TableCell>Group Access</TableCell>
                 <TableCell>Status</TableCell>
                 <TableCell>Created</TableCell>
                 <TableCell>Last Used</TableCell>
@@ -108,7 +110,7 @@ export default function ApiKeysPage() {
             <TableBody>
               {keys.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} align="center" sx={{ py: 4, color: 'text.secondary' }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 4, color: 'text.secondary' }}>
                     No API keys found
                   </TableCell>
                 </TableRow>
@@ -126,6 +128,17 @@ export default function ApiKeysPage() {
                         color={ROLE_COLORS[key.role] || 'default'}
                         variant="outlined"
                       />
+                    </TableCell>
+                    <TableCell>
+                      {key.allowed_groups === null ? (
+                        <Chip label="All groups" size="small" color="default" variant="outlined" />
+                      ) : (
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                          {key.allowed_groups.map((g) => (
+                            <Chip key={g} label={g} size="small" variant="outlined" />
+                          ))}
+                        </Box>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Chip
@@ -195,17 +208,29 @@ export default function ApiKeysPage() {
 function CreateKeyDialog({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (key: ApiKeyCreated) => void }) {
   const [name, setName] = useState('');
   const [role, setRole] = useState('readonly');
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [allAccess, setAllAccess] = useState(true);
+  const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      api.getGroups().then(setGroups).catch(() => {});
+    }
+  }, [open]);
 
   const handleCreate = async () => {
     if (!name.trim()) { setError('Name is required'); return; }
     setError(null);
     setLoading(true);
     try {
-      const key = await api.createApiKey(name.trim(), role);
+      const allowed = allAccess ? undefined : selectedGroups;
+      const key = await api.createApiKey(name.trim(), role, allowed);
       setName('');
       setRole('readonly');
+      setSelectedGroups([]);
+      setAllAccess(true);
       onCreated(key);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to create key');
@@ -215,7 +240,7 @@ function CreateKeyDialog({ open, onClose, onCreated }: { open: boolean; onClose:
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>Create API Key</DialogTitle>
       <DialogContent>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -228,7 +253,7 @@ function CreateKeyDialog({ open, onClose, onCreated }: { open: boolean; onClose:
           sx={{ mt: 1, mb: 2 }}
           placeholder="e.g. monitoring-service"
         />
-        <FormControl fullWidth size="small">
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
           <InputLabel>Role</InputLabel>
           <Select value={role} onChange={(e) => setRole(e.target.value)} label="Role">
             <MenuItem value="admin">Admin (full access)</MenuItem>
@@ -237,6 +262,32 @@ function CreateKeyDialog({ open, onClose, onCreated }: { open: boolean; onClose:
             <MenuItem value="readonly">Read-only (view only)</MenuItem>
           </Select>
         </FormControl>
+        <FormControl fullWidth size="small" sx={{ mb: 2 }}>
+          <InputLabel>Group Access</InputLabel>
+          <Select
+            value={allAccess ? 'all' : 'specific'}
+            onChange={(e) => {
+              setAllAccess(e.target.value === 'all');
+              if (e.target.value === 'all') setSelectedGroups([]);
+            }}
+            label="Group Access"
+          >
+            <MenuItem value="all">All groups</MenuItem>
+            <MenuItem value="specific">Specific groups only</MenuItem>
+          </Select>
+        </FormControl>
+        {!allAccess && (
+          <Autocomplete
+            multiple
+            options={groups.map((g) => g.group_id)}
+            value={selectedGroups}
+            onChange={(_, newVal) => setSelectedGroups(newVal)}
+            renderInput={(params) => (
+              <TextField {...params} label="Allowed Groups" size="small" placeholder="Select groups" />
+            )}
+            size="small"
+          />
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} disabled={loading}>Cancel</Button>

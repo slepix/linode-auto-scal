@@ -5,7 +5,7 @@ from sqlalchemy import desc
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
 from ..db.base import get_db
-from ..middleware.auth import require_permission
+from ..middleware.auth import require_permission, check_group_access
 from ..models.instance import Instance
 from ..models.scale_event import ScaleEvent
 from ..models.scale_request import ScaleRequest
@@ -22,8 +22,9 @@ router = APIRouter(prefix="/v1/groups", tags=["Status"])
 def group_status(
     group_id: str,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("status:read")),
+    api_key=Depends(require_permission("status:read")),
 ):
+    check_group_access(api_key, group_id)
     return get_group_status(db, group_id)
 
 
@@ -31,8 +32,9 @@ def group_status(
 def group_capacity(
     group_id: str,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("status:read")),
+    api_key=Depends(require_permission("status:read")),
 ):
+    check_group_access(api_key, group_id)
     group = db.query(Group).filter(Group.group_id == group_id, Group.deleted_at == None).first()
     if not group:
         from fastapi import HTTPException
@@ -57,8 +59,9 @@ def group_capacity(
 def group_cooldown(
     group_id: str,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("status:read")),
+    api_key=Depends(require_permission("status:read")),
 ):
+    check_group_access(api_key, group_id)
     group = db.query(Group).filter(Group.group_id == group_id, Group.deleted_at == None).first()
     if not group:
         from fastapi import HTTPException
@@ -121,8 +124,9 @@ def group_events(
     limit: int = Query(50, le=200),
     offset: int = 0,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("events:read")),
+    api_key=Depends(require_permission("events:read")),
 ):
+    check_group_access(api_key, group_id)
     events = db.query(ScaleEvent).filter(
         ScaleEvent.group_id == group_id,
     ).order_by(desc(ScaleEvent.created_at)).offset(offset).limit(limit).all()
@@ -197,8 +201,9 @@ def group_instances(
     group_id: str,
     include_deleted: bool = False,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("status:read")),
+    api_key=Depends(require_permission("status:read")),
 ):
+    check_group_access(api_key, group_id)
     q = db.query(Instance).filter(Instance.group_id == group_id)
     if not include_deleted:
         q = q.filter(Instance.deleted_at == None)
@@ -209,8 +214,9 @@ def group_instances(
 def group_nodebalancer(
     group_id: str,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("status:read")),
+    api_key=Depends(require_permission("status:read")),
 ):
+    check_group_access(api_key, group_id)
     bindings = db.query(NodebalancerBinding).filter(
         NodebalancerBinding.group_id == group_id,
         NodebalancerBinding.deleted_at == None,
@@ -234,8 +240,9 @@ def group_nodebalancer(
 def group_drift(
     group_id: str,
     db: Session = Depends(get_db),
-    _key=Depends(require_permission("status:read")),
+    api_key=Depends(require_permission("status:read")),
 ):
+    check_group_access(api_key, group_id)
     records = db.query(DriftRecord).filter(
         DriftRecord.group_id == group_id,
         DriftRecord.status == "open",

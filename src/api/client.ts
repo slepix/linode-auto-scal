@@ -99,12 +99,8 @@ export const api = {
 
   // API Keys
   getApiKeys: () => request<ApiKey[]>('GET', '/v1/api-keys'),
-  createApiKey: (name: string, role: string, allowed_groups?: string[]) =>
-    request<ApiKeyCreated>('POST', '/v1/api-keys', {
-      name,
-      role,
-      ...(allowed_groups !== undefined ? { allowed_groups } : {}),
-    }),
+  createApiKey: (name: string, role: string) =>
+    request<ApiKeyCreated>('POST', '/v1/api-keys', { name, role }),
   deleteApiKey: (id: string) => request<unknown>('DELETE', `/v1/api-keys/${id}`),
 
   // Metric Testing

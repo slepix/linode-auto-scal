@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from ..db.base import get_db
-from ..middleware.auth import require_permission, check_group_access
+from ..middleware.auth import require_permission
 from ..models.instance import Instance
 from ..models.scale_request import ScaleRequest
 from ..models.scale_event import ScaleEvent
@@ -20,9 +20,8 @@ router = APIRouter(prefix="/v1/groups", tags=["Admin"])
 def force_reconcile(
     group_id: str,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("force:ops")),
+    _key=Depends(require_permission("force:ops")),
 ):
-    check_group_access(api_key, group_id)
     group = db.query(Group).filter(Group.group_id == group_id, Group.deleted_at == None).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")
@@ -43,9 +42,8 @@ def force_delete_instance(
     group_id: str,
     instance_id: str,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("force:ops")),
+    _key=Depends(require_permission("force:ops")),
 ):
-    check_group_access(api_key, group_id)
     instance = db.query(Instance).filter(
         Instance.id == instance_id,
         Instance.group_id == group_id,
@@ -72,9 +70,8 @@ def purge_instance(
     group_id: str,
     instance_id: str,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("force:ops")),
+    _key=Depends(require_permission("force:ops")),
 ):
-    check_group_access(api_key, group_id)
     instance = db.query(Instance).filter(
         Instance.id == instance_id,
         Instance.group_id == group_id,
@@ -101,9 +98,8 @@ def purge_instance(
 def clear_cooldown(
     group_id: str,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("force:ops")),
+    _key=Depends(require_permission("force:ops")),
 ):
-    check_group_access(api_key, group_id)
     event = ScaleEvent(
         id=uuid.uuid4().hex,
         group_id=group_id,
@@ -121,9 +117,8 @@ def get_root_password(
     group_id: str,
     instance_id: str,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("root_password:read")),
+    _key=Depends(require_permission("root_password:read")),
 ):
-    check_group_access(api_key, group_id)
     instance = db.query(Instance).filter(
         Instance.id == instance_id,
         Instance.group_id == group_id,
@@ -149,9 +144,8 @@ def import_instance(
     group_id: str,
     linode_id: int,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("force:ops")),
+    _key=Depends(require_permission("force:ops")),
 ):
-    check_group_access(api_key, group_id)
     group = db.query(Group).filter(Group.group_id == group_id, Group.deleted_at == None).first()
     if not group:
         raise HTTPException(status_code=404, detail="Group not found")

@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from ..db.base import get_db
-from ..middleware.auth import require_permission, check_group_access, get_allowed_groups
+from ..middleware.auth import require_permission
 from ..schemas.group import GroupCreate, GroupUpdate, GroupResponse, MetricScalingConfig
 from ..services.group_service import create_group, get_groups, get_group, update_group, delete_group, group_to_response
 
@@ -25,12 +25,9 @@ def list_groups_endpoint(
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("status:read")),
+    _key=Depends(require_permission("status:read")),
 ):
     groups = get_groups(db, skip, limit)
-    allowed = get_allowed_groups(api_key)
-    if allowed is not None:
-        groups = [g for g in groups if g.group_id in allowed]
     return [group_to_response(g) for g in groups]
 
 
@@ -38,9 +35,8 @@ def list_groups_endpoint(
 def get_group_endpoint(
     group_id: str,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("status:read")),
+    _key=Depends(require_permission("status:read")),
 ):
-    check_group_access(api_key, group_id)
     group = get_group(db, group_id)
     return group_to_response(group)
 
@@ -50,9 +46,8 @@ def update_group_endpoint(
     group_id: str,
     payload: GroupUpdate,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("groups:write")),
+    _key=Depends(require_permission("groups:write")),
 ):
-    check_group_access(api_key, group_id)
     group = update_group(db, group_id, payload)
     return group_to_response(group)
 
@@ -62,9 +57,8 @@ def delete_group_endpoint(
     group_id: str,
     force: bool = Query(default=False),
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("groups:delete")),
+    _key=Depends(require_permission("groups:delete")),
 ):
-    check_group_access(api_key, group_id)
     return delete_group(db, group_id, force)
 
 
@@ -84,9 +78,8 @@ async def test_metric_endpoint(
     group_id: str,
     payload: TestMetricRequest,
     db: Session = Depends(get_db),
-    api_key=Depends(require_permission("groups:write")),
+    _key=Depends(require_permission("groups:write")),
 ):
-    check_group_access(api_key, group_id)
     from ..services.metric_test_service import fetch_metric_value
     get_group(db, group_id)
     return await fetch_metric_value(payload.metric_scaling)

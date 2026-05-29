@@ -1,9 +1,8 @@
-import json
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List
 from ..db.base import get_db
 from ..middleware.auth import require_permission
 from ..models.api_key import ApiKey
@@ -11,27 +10,6 @@ from ..schemas.api_key import ApiKeyCreate, ApiKeyResponse, ApiKeyCreatedRespons
 from ..core.crypto import generate_api_key, hash_api_key
 
 router = APIRouter(prefix="/v1/api-keys", tags=["API Keys"])
-
-
-def _parse_allowed_groups(raw: Optional[str]) -> Optional[List[str]]:
-    if raw is None:
-        return None
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return None
-
-
-def _key_to_response(api_key: ApiKey) -> dict:
-    return {
-        "id": api_key.id,
-        "name": api_key.name,
-        "role": api_key.role,
-        "enabled": api_key.enabled,
-        "allowed_groups": _parse_allowed_groups(api_key.allowed_groups_json),
-        "created_at": api_key.created_at,
-        "last_used_at": api_key.last_used_at,
-    }
 
 
 @router.post("", response_model=ApiKeyCreatedResponse, status_code=201)
@@ -44,10 +22,6 @@ def create_api_key(
     if payload.role not in valid_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {valid_roles}")
 
-    allowed_groups_json = None
-    if payload.allowed_groups is not None:
-        allowed_groups_json = json.dumps(payload.allowed_groups)
-
     raw_key = generate_api_key()
     key_hash = hash_api_key(raw_key)
     api_key = ApiKey(
@@ -56,14 +30,19 @@ def create_api_key(
         key_hash=key_hash,
         role=payload.role,
         enabled=True,
-        allowed_groups_json=allowed_groups_json,
     )
     db.add(api_key)
     db.commit()
     db.refresh(api_key)
-    resp = _key_to_response(api_key)
-    resp["key"] = raw_key
-    return ApiKeyCreatedResponse(**resp)
+    return ApiKeyCreatedResponse(
+        id=api_key.id,
+        name=api_key.name,
+        role=api_key.role,
+        enabled=api_key.enabled,
+        created_at=api_key.created_at,
+        last_used_at=api_key.last_used_at,
+        key=raw_key,
+    )
 
 
 @router.get("", response_model=List[ApiKeyResponse])
@@ -72,7 +51,7 @@ def list_api_keys(
     _key=Depends(require_permission("api_keys:manage")),
 ):
     keys = db.query(ApiKey).filter(ApiKey.deleted_at == None).all()
-    return [ApiKeyResponse(**_key_to_response(k)) for k in keys]
+    return keys
 
 
 @router.delete("/{key_id}")

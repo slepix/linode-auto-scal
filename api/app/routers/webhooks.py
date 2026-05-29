@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 from typing import Optional
 from ..db.base import get_db
-from ..middleware.auth import require_permission, check_group_access
+from ..middleware.auth import require_permission
 from ..schemas.scale import WebhookScalePayload, ScaleRequestResponse
 from ..services.scale_service import create_scale_request
 
@@ -18,7 +18,6 @@ def webhook_scale(
 ):
     data = payload.model_dump(exclude_none=True)
     group_id = data.pop("group_id")
-    check_group_access(api_key, group_id)
     req_type = data.get("action", "scale")
     req = create_scale_request(db, group_id, req_type, data, idempotency_key, api_key.id)
     return req

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	dbpkg "github.com/linode-instance-autoscaler/controller/internal/db"
+	"github.com/linode-instance-autoscaler/controller/internal/metrics"
 	"go.uber.org/zap"
 )
 
@@ -116,8 +117,13 @@ func (p *Poller) pollGroup(groupID string, configJSON sql.NullString) {
 	p.lastPoll[groupID] = time.Now()
 	p.mu.Unlock()
 
+	fetchStart := time.Now()
 	value, err := FetchMetricValue(cfg)
+	fetchDuration := time.Since(fetchStart).Seconds()
+
 	if err != nil {
+		metrics.MetricFetchErrorsTotal.WithLabelValues(groupID, cfg.SourceType).Inc()
+		metrics.MetricFetchDuration.WithLabelValues(groupID, cfg.SourceType).Observe(fetchDuration)
 		p.log.Warnw("metric fetch failed", "group_id", groupID, "source", cfg.SourceType, "error", err)
 		p.emitEventWithMeta(groupID, "metric_fetch_failed", "warning",
 			fmt.Sprintf("Failed to fetch metric from %s: %v", cfg.SourceType, err),
@@ -130,6 +136,8 @@ func (p *Poller) pollGroup(groupID string, configJSON sql.NullString) {
 			})
 		return
 	}
+
+	metrics.MetricFetchDuration.WithLabelValues(groupID, cfg.SourceType).Observe(fetchDuration)
 
 	p.log.Debugw("metric fetched", "group_id", groupID, "value", value)
 

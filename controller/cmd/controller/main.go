@@ -147,6 +147,7 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 				elapsed := time.Since(lastEvent.CreatedAt).Seconds()
 				if elapsed < float64(cooldownCfg.ScaleUpSeconds) {
 					log.Infow("scale-up blocked by cooldown", "elapsed", elapsed, "required", cooldownCfg.ScaleUpSeconds)
+					metrics.ScaleBlockedTotal.WithLabelValues(req.GroupID, "cooldown").Inc()
 					dbpkg.UpdateScaleRequestStatus(db, req.ID, "blocked_by_cooldown")
 					return
 				}
@@ -159,6 +160,7 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 				elapsed := time.Since(lastEvent.CreatedAt).Seconds()
 				if elapsed < float64(cooldownCfg.ScaleDownSeconds) {
 					log.Infow("scale-down blocked by cooldown", "elapsed", elapsed, "required", cooldownCfg.ScaleDownSeconds)
+					metrics.ScaleBlockedTotal.WithLabelValues(req.GroupID, "cooldown").Inc()
 					dbpkg.UpdateScaleRequestStatus(db, req.ID, "blocked_by_cooldown")
 					return
 				}
@@ -183,6 +185,7 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 			if canCreate <= 0 {
 				if !anySuccess {
 					log.Infow("already at or above target", "in_flight", inFlight, "cap", cap)
+					metrics.ScaleBlockedTotal.WithLabelValues(req.GroupID, "max_instances").Inc()
 					dbpkg.UpdateScaleRequestStatus(db, req.ID, "blocked_by_max_instances")
 					return
 				}

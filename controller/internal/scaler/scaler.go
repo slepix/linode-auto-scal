@@ -83,6 +83,7 @@ func (s *Scaler) ExecuteScaleUp(req *dbpkg.ScaleRequest, group *dbpkg.Group, amo
 	for i := 0; i < amount; i++ {
 		go func(idx int) {
 			defer wg.Done()
+			start := time.Now()
 			if err := s.createSingleInstance(log, linodeClient, nbClient, group, bootCfg, networkCfg, nbCfg, tags, readinessCfg); err != nil {
 				log.Errorw("failed to create instance", "error", err, "instance_num", idx+1)
 				s.emitEventWithMeta(group.GroupID, "", "scale_failed", "critical",
@@ -98,6 +99,7 @@ func (s *Scaler) ExecuteScaleUp(req *dbpkg.ScaleRequest, group *dbpkg.Group, amo
 						"image":         group.Image,
 					})
 			} else {
+				metrics.InstanceCreationDuration.WithLabelValues(group.GroupID).Observe(time.Since(start).Seconds())
 				atomic.AddInt64(&successCount, 1)
 			}
 		}(i)
@@ -279,6 +281,11 @@ func (s *Scaler) createSingleInstance(
 	dbpkg.UpdateInstanceStatus(s.db, instanceID, "checking_tcp")
 	if readinessCfg != nil && primaryIP != "" {
 		if err := readiness.WaitForReady(readinessCfg, primaryIP); err != nil {
+			checkType := "tcp"
+			if readinessCfg.HTTP != nil && readinessCfg.HTTP.Enabled {
+				checkType = "http"
+			}
+			metrics.ReadinessCheckFailuresTotal.WithLabelValues(group.GroupID, checkType).Inc()
 			log.Warnw("readiness check failed, cleaning up", "error", err, "linode_id", created.ID)
 			meta := map[string]interface{}{
 				"error":           err.Error(),
@@ -432,6 +439,7 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 			allowed := len(activeInstances) - group.MinInstances
 			if allowed <= 0 {
 				log.Infow("targeted scale-down blocked by min_instances constraint")
+				metrics.ScaleBlockedTotal.WithLabelValues(group.GroupID, "min_instances").Inc()
 				dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
 				return nil
 			}
@@ -456,6 +464,7 @@ func (s *Scaler) ExecuteScaleDown(req *dbpkg.ScaleRequest, group *dbpkg.Group, a
 
 		if amount <= 0 {
 			log.Infow("no instances eligible for scale-down (min_instances constraint)")
+			metrics.ScaleBlockedTotal.WithLabelValues(group.GroupID, "min_instances").Inc()
 			dbpkg.UpdateScaleRequestStatus(s.db, req.ID, "blocked_by_min_instances")
 			return nil
 		}

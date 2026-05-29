@@ -33,6 +33,7 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 
 	token, err := scaler.Decrypt(r.secretKey, group.EncryptedLinodeToken)
 	if err != nil {
+		metrics.ReconciliationsTotal.WithLabelValues(group.GroupID, "failure").Inc()
 		log.Errorw("failed to decrypt token for reconciliation", "error", err)
 		r.emitEventWithMeta(group.GroupID, "", "reconcile_failed", "error",
 			fmt.Sprintf("Failed to decrypt token: %v", err),
@@ -50,6 +51,7 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 	linodes, err := linodeClient.ListLinodes(requiredTags)
 	if err != nil {
 		metrics.LinodeAPIErrorsTotal.WithLabelValues(group.GroupID, "list_instances").Inc()
+		metrics.ReconciliationsTotal.WithLabelValues(group.GroupID, "failure").Inc()
 		log.Errorw("failed to list linodes for reconciliation", "error", err)
 		r.emitEventWithMeta(group.GroupID, "", "reconcile_failed", "error",
 			fmt.Sprintf("Failed to list linodes: %v", err),
@@ -63,6 +65,7 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 	// Get DB instances
 	dbInstances, err := dbpkg.GetAllNonDeletedInstances(r.db, group.GroupID)
 	if err != nil {
+		metrics.ReconciliationsTotal.WithLabelValues(group.GroupID, "failure").Inc()
 		log.Errorw("failed to get DB instances", "error", err)
 		return
 	}
@@ -122,6 +125,7 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 
 	elapsed := time.Since(start).Seconds()
 	metrics.ReconciliationDuration.WithLabelValues(group.GroupID).Observe(elapsed)
+	metrics.ReconciliationsTotal.WithLabelValues(group.GroupID, "success").Inc()
 	log.Infow("reconciliation complete", "duration_seconds", elapsed)
 }
 

@@ -45,6 +45,10 @@ var (
 		Help:    "Reconciliation duration",
 		Buckets: prometheus.DefBuckets,
 	}, []string{"group_id"})
+	ReconciliationsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "autoscaler_reconciliations_total",
+		Help: "Total reconciliations by outcome",
+	}, []string{"group_id", "result"})
 )
 
 func RefreshGauges(db *sql.DB) {

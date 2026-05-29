@@ -184,33 +184,35 @@ func (c *Client) DeleteLinode(linodeID int64) error {
 func (c *Client) ListLinodes(tags []string) ([]LinodeInstance, error) {
 	ctx := context.Background()
 
-	instances, err := c.api.ListInstances(ctx, linodego.NewListOptions(0, ""))
+	filter := buildTagFilter(tags)
+	instances, err := c.api.ListInstances(ctx, linodego.NewListOptions(0, filter))
 	if err != nil {
 		return nil, err
 	}
 
-	var filtered []LinodeInstance
+	var result []LinodeInstance
 	for _, inst := range instances {
-		li := instanceFromAPI(&inst)
-		if hasAllTags(li.Tags, tags) {
-			filtered = append(filtered, *li)
-		}
+		result = append(result, *instanceFromAPI(&inst))
 	}
-	return filtered, nil
+	return result, nil
 }
 
-func hasAllTags(instTags, required []string) bool {
-	tagSet := make(map[string]struct{}, len(instTags))
-	for _, t := range instTags {
-		tagSet[t] = struct{}{}
+func buildTagFilter(tags []string) string {
+	if len(tags) == 0 {
+		return ""
 	}
-	for _, t := range required {
-		if _, ok := tagSet[t]; !ok {
-			return false
-		}
+	if len(tags) == 1 {
+		b, _ := json.Marshal(tags[0])
+		return fmt.Sprintf(`{"tags": {"+contains": %s}}`, string(b))
 	}
-	return true
+	clauses := make([]string, len(tags))
+	for i, tag := range tags {
+		b, _ := json.Marshal(tag)
+		clauses[i] = fmt.Sprintf(`{"tags": {"+contains": %s}}`, string(b))
+	}
+	return fmt.Sprintf(`{"+and": [%s]}`, strings.Join(clauses, ", "))
 }
+
 
 // GetLinodeVPCIP retrieves the VPC IPv4 address for a Linode using the Interfaces API.
 func (c *Client) GetLinodeVPCIP(linodeID int64) (string, error) {

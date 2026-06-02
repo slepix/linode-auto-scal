@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	dbpkg "github.com/linode-instance-autoscaler/controller/internal/db"
@@ -123,10 +124,78 @@ func (r *Reconciler) ReconcileGroup(group *dbpkg.Group) {
 		}
 	}
 
+	// Finalize pending imports: validate against Linode API and transition to active
+	r.finalizePendingImports(group, linodeClient, linodeByID, log)
+
 	elapsed := time.Since(start).Seconds()
 	metrics.ReconciliationDuration.WithLabelValues(group.GroupID).Observe(elapsed)
 	metrics.ReconciliationsTotal.WithLabelValues(group.GroupID, "success").Inc()
 	log.Infow("reconciliation complete", "duration_seconds", elapsed)
+}
+
+func (r *Reconciler) finalizePendingImports(group *dbpkg.Group, linodeClient *linode.Client, linodeByID map[int64]linode.LinodeInstance, log *zap.SugaredLogger) {
+	pending, err := dbpkg.GetPendingImports(r.db, group.GroupID)
+	if err != nil {
+		log.Errorw("failed to get pending imports", "error", err)
+		return
+	}
+
+	for _, inst := range pending {
+		if !inst.LinodeID.Valid {
+			log.Warnw("imported instance has no linode_id, marking failed", "instance_id", inst.ID)
+			dbpkg.UpdateInstanceStatus(r.db, inst.ID, "failed")
+			continue
+		}
+
+		linodeID := inst.LinodeID.Int64
+
+		// Check if the Linode exists (prefer the already-fetched list, fall back to direct API call)
+		linodeData, found := linodeByID[linodeID]
+		if !found {
+			fetched, err := linodeClient.GetLinode(linodeID)
+			if err != nil {
+				log.Warnw("imported linode not found in API, marking failed",
+					"instance_id", inst.ID, "linode_id", linodeID, "error", err)
+				dbpkg.UpdateInstanceStatus(r.db, inst.ID, "failed")
+				r.emitEvent(group.GroupID, inst.ID, "import_failed", "error",
+					fmt.Sprintf("Imported linode %d not found in API: %v", linodeID, err))
+				continue
+			}
+			linodeData = *fetched
+		}
+
+		// Populate instance metadata from Linode API data
+		dbpkg.SetInstanceLinodeData(r.db, inst.ID, linodeData.ID, linodeData.Label)
+
+		var publicIP, privateIP string
+		for _, ip := range linodeData.IPv4 {
+			if isPrivateIP(ip) {
+				if privateIP == "" {
+					privateIP = ip
+				}
+			} else {
+				publicIP = ip
+			}
+		}
+
+		// Try to get VPC IP
+		vpcIP, _ := linodeClient.GetLinodeVPCIP(linodeData.ID)
+
+		dbpkg.UpdateInstanceIPs(r.db, inst.ID,
+			toNullString(publicIP),
+			toNullString(privateIP),
+			toNullString(vpcIP),
+		)
+
+		dbpkg.UpdateInstanceStatus(r.db, inst.ID, "active")
+		dbpkg.ResolveDriftRecord(r.db, group.GroupID, linodeID)
+
+		log.Infow("import finalized",
+			"instance_id", inst.ID, "linode_id", linodeID, "label", linodeData.Label,
+			"public_ip", publicIP, "private_ip", privateIP, "vpc_ip", vpcIP)
+		r.emitEvent(group.GroupID, inst.ID, "import_completed", "info",
+			fmt.Sprintf("Imported linode %d (%s) is now active", linodeID, linodeData.Label))
+	}
 }
 
 func (r *Reconciler) maybeQueueReplacement(group *dbpkg.Group, log *zap.SugaredLogger) {
@@ -263,4 +332,20 @@ func (r *Reconciler) emitEventWithMeta(groupID, instanceID, eventType, severity,
 		}
 	}
 	dbpkg.InsertScaleEvent(r.db, e)
+}
+
+func isPrivateIP(ip string) bool {
+	return strings.HasPrefix(ip, "192.168.") ||
+		strings.HasPrefix(ip, "10.") ||
+		strings.HasPrefix(ip, "172.16.") ||
+		strings.HasPrefix(ip, "172.17.") ||
+		strings.HasPrefix(ip, "172.18.") ||
+		strings.HasPrefix(ip, "172.19.") ||
+		strings.HasPrefix(ip, "172.2") ||
+		strings.HasPrefix(ip, "172.30.") ||
+		strings.HasPrefix(ip, "172.31.")
+}
+
+func toNullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }

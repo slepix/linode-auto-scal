@@ -272,6 +272,14 @@ func InsertDriftRecord(db *sql.DB, groupID string, linodeID int64, driftType, me
 	return err
 }
 
+func ResolveDriftRecord(db *sql.DB, groupID string, linodeID int64) error {
+	_, err := db.Exec(
+		`UPDATE drift_records SET status = 'resolved', resolved_at = NOW() WHERE group_id = $1 AND linode_id = $2 AND status IN ('open', 'importing')`,
+		groupID, linodeID,
+	)
+	return err
+}
+
 func SetInstanceLinodeData(db *sql.DB, instanceID string, linodeID int64, label string) error {
 	_, err := db.Exec(
 		`UPDATE instances SET linode_id = $1, linode_label = $2, updated_at = NOW() WHERE id = $3`,
@@ -339,4 +347,21 @@ func CountCreatingInstances(db *sql.DB, groupID string) (int, error) {
 		groupID,
 	).Scan(&count)
 	return count, err
+}
+
+func GetPendingImports(db *sql.DB, groupID string) ([]Instance, error) {
+	rows, err := db.Query(`
+		SELECT id, group_id, linode_id, linode_label, region, type, image,
+		       public_ipv4, private_ipv4, vpc_ipv4, vpc_id, subnet_id,
+		       status, created_by, protected, encrypted_root_password,
+		       created_at, updated_at, deleted_at
+		FROM instances
+		WHERE group_id = $1 AND status = 'creating' AND created_by = 'import' AND deleted_at IS NULL
+		ORDER BY created_at ASC
+	`, groupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanInstances(rows)
 }

@@ -78,11 +78,17 @@ func (s *Scaler) ExecuteScaleUp(req *dbpkg.ScaleRequest, group *dbpkg.Group, amo
 
 	var successCount int64
 	var wg sync.WaitGroup
-	wg.Add(amount)
+	sem := make(chan struct{}, 3)
 
 	for i := 0; i < amount; i++ {
+		if i > 0 {
+			time.Sleep(2 * time.Second)
+		}
+		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			start := time.Now()
 			if err := s.createSingleInstance(log, linodeClient, nbClient, group, bootCfg, networkCfg, nbCfg, tags, readinessCfg); err != nil {
 				log.Errorw("failed to create instance", "error", err, "instance_num", idx+1)

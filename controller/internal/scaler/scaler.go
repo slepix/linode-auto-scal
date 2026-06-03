@@ -85,12 +85,19 @@ func (s *Scaler) ExecuteScaleUp(req *dbpkg.ScaleRequest, group *dbpkg.Group, amo
 			time.Sleep(2 * time.Second)
 		}
 		wg.Add(1)
+		sem <- struct{}{}
 		go func(idx int) {
 			defer wg.Done()
-			sem <- struct{}{}
-			defer func() { <-sem }()
+			var released bool
+			release := func() {
+				if !released {
+					released = true
+					<-sem
+				}
+			}
+			defer release()
 			start := time.Now()
-			if err := s.createSingleInstance(log, linodeClient, nbClient, group, bootCfg, networkCfg, nbCfg, tags, readinessCfg); err != nil {
+			if err := s.createSingleInstance(log, linodeClient, nbClient, group, bootCfg, networkCfg, nbCfg, tags, readinessCfg, release); err != nil {
 				log.Errorw("failed to create instance", "error", err, "instance_num", idx+1)
 				s.emitEventWithMeta(group.GroupID, "", "scale_failed", "critical",
 					fmt.Sprintf("Scale-up failed: %v", err),
@@ -141,6 +148,7 @@ func (s *Scaler) createSingleInstance(
 	nbCfg *NodebalancerConfig,
 	tags []string,
 	readinessCfg *readiness.Config,
+	releaseSlot func(),
 ) error {
 	label := GenerateInstanceLabel(group.LabelPrefix, group.Region)
 
@@ -217,10 +225,15 @@ func (s *Scaler) createSingleInstance(
 	log.Infow("creating linode", "label", label)
 	created, err := linodeClient.CreateLinode(createReq)
 	if err != nil {
+		releaseSlot()
 		metrics.LinodeAPIErrorsTotal.WithLabelValues(group.GroupID, "create_instance").Inc()
 		dbpkg.UpdateInstanceStatus(s.db, instanceID, "failed")
 		return fmt.Errorf("create linode: %w", err)
 	}
+
+	// Linode is created; free the semaphore slot so the next instance can start
+	// being created in parallel while we run readiness checks and NB attachment.
+	releaseSlot()
 
 	// Store linode ID and label
 	dbpkg.SetInstanceLinodeData(s.db, instanceID, created.ID, created.Label)

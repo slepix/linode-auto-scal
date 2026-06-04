@@ -187,6 +187,23 @@ func (p *Poller) evaluate(groupID string, cfg *MetricScalingConfig, avg float64)
 }
 
 func (p *Poller) submitScaleRequest(groupID, action string, amount int, reason string) {
+	group, err := dbpkg.GetGroupByGroupID(p.db, groupID)
+	if err == nil {
+		if action == "scale_up" {
+			newDesired := group.DesiredCount + amount
+			if newDesired > group.MaxInstances {
+				newDesired = group.MaxInstances
+			}
+			dbpkg.UpdateGroupDesiredCount(p.db, groupID, newDesired)
+		} else if action == "scale_down" {
+			newDesired := group.DesiredCount - amount
+			if newDesired < group.MinInstances {
+				newDesired = group.MinInstances
+			}
+			dbpkg.UpdateGroupDesiredCount(p.db, groupID, newDesired)
+		}
+	}
+
 	req := &dbpkg.ScaleRequest{
 		ID:          fmt.Sprintf("msr-%d", time.Now().UnixNano()),
 		GroupID:     groupID,

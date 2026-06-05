@@ -52,11 +52,72 @@ curl -X POST http://localhost:8000/v1/groups \
   },
   "cooldowns": {
     "scale_up_seconds": 300,
-    "scale_down_seconds": 600
+    "scale_down_seconds": 600,
+    "stabilization_seconds": 180
   }
 }
 EOF
 ```
+
+## Cooldowns
+
+Cooldown settings prevent excessive scaling by enforcing wait periods after scale events.
+
+```json
+{
+  "cooldowns": {
+    "scale_up_seconds": 300,
+    "scale_down_seconds": 600,
+    "stabilization_seconds": 180
+  }
+}
+```
+
+### Fields
+
+| Field | Default | Description |
+|---|---|---|
+| `scale_up_seconds` | 300 | After a scale-up completes, block further scale-ups for this many seconds |
+| `scale_down_seconds` | 600 | After a scale-down completes, block further scale-downs for this many seconds |
+| `stabilization_seconds` | 0 (disabled) | After **any** scaling event (up or down), block **all** scaling for this many seconds |
+
+### Stabilization Window (Anti Yo-Yo)
+
+The `stabilization_seconds` field provides a global lock that prevents the yo-yo effect where the system oscillates between scaling up and down repeatedly. When set:
+
+1. After any `scale_up_completed` or `scale_down_completed` event, all scaling (both directions) is blocked for the configured duration
+2. This check runs before the per-direction cooldowns
+3. Clearing cooldown via the admin API (`POST /v1/admin/{group_id}/clear-cooldown`) also clears the stabilization window
+4. Set to `0` to disable (default behavior — only per-direction cooldowns apply)
+
+**Example scenario without stabilization:** Metric rises above threshold → scale up → metric drops below threshold → scale down → metric rises again → scale up... (repeating every few minutes)
+
+**With `stabilization_seconds: 180`:** After the initial scale-up, all scaling is blocked for 3 minutes, giving the system time to reach steady state before the next scaling decision.
+
+### Cooldown Status API
+
+```bash
+GET /v1/status/{group_id}/cooldown
+```
+
+Returns current cooldown state including stabilization:
+
+```json
+{
+  "group_id": "web-prod",
+  "scale_up_cooldown_seconds": 300,
+  "scale_down_cooldown_seconds": 600,
+  "scale_up_remaining_seconds": 120,
+  "scale_down_remaining_seconds": 0,
+  "scale_up_in_cooldown": true,
+  "scale_down_in_cooldown": false,
+  "stabilization_seconds": 180,
+  "stabilization_remaining_seconds": 45,
+  "stabilization_active": true
+}
+```
+
+---
 
 ## Metric-Based Scaling
 

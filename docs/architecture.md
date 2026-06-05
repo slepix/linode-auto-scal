@@ -65,7 +65,7 @@ The Linode Instance Autoscaler is a self-hosted, API-first autoscaling system fo
 5. Averages all samples in the window and compares against thresholds
 6. If threshold breached, inserts a `ScaleRequest` with `source=metric_poller`
 7. Request enters the normal queue and is picked up by the scale request processor
-8. Cooldowns, min/max constraints, and concurrent op checks still apply
+8. Stabilization window, per-direction cooldowns, min/max constraints, and concurrent op checks still apply
 
 ## Data Flow: Scale-Up
 1. External caller → `POST /v1/groups/{id}/scale-up`

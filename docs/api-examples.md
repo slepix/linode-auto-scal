@@ -125,7 +125,8 @@ curl -X POST "$AUTOSCALER_URL/v1/groups" \
     },
     "cooldowns": {
       "scale_up_seconds": 120,
-      "scale_down_seconds": 300
+      "scale_down_seconds": 300,
+      "stabilization_seconds": 180
     },
     "reconciliation": {
       "enabled": true,
@@ -266,7 +267,7 @@ The exported JSON is an array of group objects:
     "protected_tag": "autoscaler:protected",
     "nodebalancer_id": 55555,
     "network_config": { "mode": "vpc_ipv4", "vpc_id": 12345, "subnet_id": 67890 },
-    "cooldown_config": { "scale_up_seconds": 120, "scale_down_seconds": 300 }
+    "cooldown_config": { "scale_up_seconds": 120, "scale_down_seconds": 300, "stabilization_seconds": 180 }
   }
 ]
 ```
@@ -434,7 +435,10 @@ Response:
   "scale_up_remaining_seconds": 0,
   "scale_down_remaining_seconds": 87,
   "scale_up_in_cooldown": false,
-  "scale_down_in_cooldown": true
+  "scale_down_in_cooldown": true,
+  "stabilization_seconds": 180,
+  "stabilization_remaining_seconds": 45,
+  "stabilization_active": true
 }
 ```
 
@@ -495,7 +499,7 @@ curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/instances/inst-1749214021/force
 
 ### Clear Cooldown
 
-Remove active cooldown timers to allow immediate scaling:
+Remove active cooldown timers (including stabilization window) to allow immediate scaling:
 
 ```bash
 curl -X POST "$AUTOSCALER_URL/v1/groups/web-prod/clear-cooldown" \

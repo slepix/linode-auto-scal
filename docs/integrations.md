@@ -188,7 +188,7 @@ The metric poller runs as a separate goroutine in the Go controller and never bl
 4. Values are stored in a sliding window of `evaluation_window_seconds` duration
 5. Once at least 2 samples exist, the window average is compared against thresholds
 6. If the threshold is breached, a scale request is submitted to the normal queue
-7. The request then goes through standard cooldown checks, min/max constraints, etc.
+7. The request then goes through stabilization window, per-direction cooldown checks, min/max constraints, etc.
 
 ### Events
 

@@ -178,6 +178,10 @@ func (p *Poller) evaluate(groupID string, cfg *MetricScalingConfig, avg float64)
 			return
 		}
 
+		if group.DesiredCount > active {
+			return
+		}
+
 		pending, _ := dbpkg.HasPendingScaleUp(p.db, groupID)
 		if pending {
 			return
@@ -196,6 +200,10 @@ func (p *Poller) evaluate(groupID string, cfg *MetricScalingConfig, avg float64)
 		active, _ := dbpkg.CountActiveInstances(p.db, groupID)
 
 		if active <= group.MinInstances {
+			return
+		}
+
+		if group.DesiredCount < active {
 			return
 		}
 

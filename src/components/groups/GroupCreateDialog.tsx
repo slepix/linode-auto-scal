@@ -56,6 +56,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
   // Cooldowns
   const [scaleUpCooldown, setScaleUpCooldown] = useState(300);
   const [scaleDownCooldown, setScaleDownCooldown] = useState(600);
+  const [stabilizationSeconds, setStabilizationSeconds] = useState(0);
 
   // Readiness
   const [readinessWait, setReadinessWait] = useState(90);
@@ -90,6 +91,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
     setNbDrainParallelism(1);
     setScaleUpCooldown(300);
     setScaleDownCooldown(600);
+    setStabilizationSeconds(0);
     setReadinessWait(90);
     setReadinessTimeout(300);
     setAutoReplace(false);
@@ -145,7 +147,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
         };
       }
 
-      data.cooldowns = { scale_up_seconds: scaleUpCooldown, scale_down_seconds: scaleDownCooldown };
+      data.cooldowns = { scale_up_seconds: scaleUpCooldown, scale_down_seconds: scaleDownCooldown, stabilization_seconds: stabilizationSeconds };
       data.reconciliation = { enabled: true, interval_seconds: 60, auto_replace: autoReplace };
       data.readiness = {
         initial_wait_seconds: readinessWait,
@@ -440,6 +442,17 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
                   value={scaleDownCooldown}
                   onChange={(e) => setScaleDownCooldown(Number(e.target.value))}
                   size="small"
+                />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Stabilization (s)"
+                  type="number"
+                  value={stabilizationSeconds}
+                  onChange={(e) => setStabilizationSeconds(Number(e.target.value))}
+                  size="small"
+                  helperText="Global lock after any event"
                 />
               </Grid>
               <Grid size={{ xs: 6, sm: 3 }}>

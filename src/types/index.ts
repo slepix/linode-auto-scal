@@ -79,6 +79,7 @@ export interface ReadinessConfig {
 export interface CooldownConfig {
   scale_up_seconds: number;
   scale_down_seconds: number;
+  stabilization_seconds: number;
 }
 
 export interface ReconciliationConfig {
@@ -231,6 +232,9 @@ export interface CooldownStatus {
   scale_down_remaining_seconds: number;
   scale_up_in_cooldown: boolean;
   scale_down_in_cooldown: boolean;
+  stabilization_seconds: number;
+  stabilization_remaining_seconds: number;
+  stabilization_active: boolean;
 }
 
 export interface ApiKey {

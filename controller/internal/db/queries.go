@@ -262,7 +262,23 @@ func GetLastScaleEventOfType(db *sql.DB, groupID, eventType string) (*ScaleEvent
 	return &e, err
 }
 
-func InsertDriftRecord(db *sql.DB, groupID string, linodeID int64, driftType, message string) error {
+func GetLastScaleEventAny(db *sql.DB, groupID string) (*ScaleEvent, error) {
+	var e ScaleEvent
+	err := db.QueryRow(`
+		SELECT id, group_id, instance_id, event_type, severity, message, metadata_json, created_at
+		FROM scale_events
+		WHERE group_id = $1 AND event_type IN ('scale_up_completed', 'scale_down_completed')
+		ORDER BY created_at DESC
+		LIMIT 1
+	`, groupID).Scan(
+		&e.ID, &e.GroupID, &e.InstanceID, &e.EventType, &e.Severity, &e.Message, &e.MetadataJSON, &e.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	return &e, err
+}
+(db *sql.DB, groupID string, linodeID int64, driftType, message string) error {
 	id := fmt.Sprintf("%d", time.Now().UnixNano())
 	_, err := db.Exec(`
 		INSERT INTO drift_records (id, group_id, linode_id, drift_type, status, message)

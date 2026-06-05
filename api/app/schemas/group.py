@@ -58,6 +58,7 @@ class ReadinessConfig(BaseModel):
 class CooldownConfig(BaseModel):
     scale_up_seconds: int = 300
     scale_down_seconds: int = 600
+    stabilization_seconds: int = 0
 
 
 class ReconciliationConfig(BaseModel):

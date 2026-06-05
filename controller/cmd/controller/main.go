@@ -139,6 +139,25 @@ func processRequest(db *sql.DB, s *scaler.Scaler, log *zap.SugaredLogger, cfg *c
 
 	if !skipCooldown {
 		cooldownCfg, _ := scaler.ParseCooldownConfig(group.CooldownConfigJSON.String)
+
+		// Global stabilization window: blocks all scaling after any scale event
+		if cooldownCfg.StabilizationSeconds > 0 {
+			lastAny, _ := dbpkg.GetLastScaleEventAny(db, req.GroupID)
+			clearEvent, _ := dbpkg.GetLastScaleEventOfType(db, req.GroupID, "cooldown_cleared")
+			cooldownCleared := clearEvent != nil && lastAny != nil && clearEvent.CreatedAt.After(lastAny.CreatedAt)
+			if lastAny != nil && !cooldownCleared {
+				elapsed := time.Since(lastAny.CreatedAt).Seconds()
+				if elapsed < float64(cooldownCfg.StabilizationSeconds) {
+					log.Infow("scaling blocked by stabilization window",
+						"elapsed", elapsed, "required", cooldownCfg.StabilizationSeconds,
+						"last_event_type", lastAny.EventType)
+					metrics.ScaleBlockedTotal.WithLabelValues(req.GroupID, "stabilization").Inc()
+					dbpkg.UpdateScaleRequestStatus(db, req.ID, "blocked_by_cooldown")
+					return
+				}
+			}
+		}
+
 		if action == "scale_up" {
 			lastEvent, _ := dbpkg.GetLastScaleEventOfType(db, req.GroupID, "scale_up_completed")
 			clearEvent, _ := dbpkg.GetLastScaleEventOfType(db, req.GroupID, "cooldown_cleared")

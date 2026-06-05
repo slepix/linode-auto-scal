@@ -43,9 +43,40 @@ export default function CooldownStatus({ groupId }: Props) {
   const downPct = cooldown.scale_down_cooldown_seconds > 0
     ? (cooldown.scale_down_remaining_seconds / cooldown.scale_down_cooldown_seconds) * 100
     : 0;
+  const stabPct = cooldown.stabilization_seconds > 0
+    ? (cooldown.stabilization_remaining_seconds / cooldown.stabilization_seconds) * 100
+    : 0;
 
   return (
     <Grid container spacing={2}>
+      {cooldown.stabilization_seconds > 0 && (
+        <Grid size={{ xs: 12 }}>
+          <Card variant="outlined">
+            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                <Typography variant="overline" color="text.secondary">Stabilization Window</Typography>
+                <Chip
+                  label={cooldown.stabilization_active ? 'Active' : 'Ready'}
+                  size="small"
+                  color={cooldown.stabilization_active ? 'error' : 'success'}
+                  variant="outlined"
+                />
+              </Box>
+              <Typography variant="h5" color={cooldown.stabilization_active ? 'error.main' : 'success.main'}>
+                {formatSeconds(cooldown.stabilization_remaining_seconds)}
+              </Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, mb: 1.5 }}>
+                Blocks all scaling for {cooldown.stabilization_seconds}s after any scale event
+              </Typography>
+              <LinearProgress
+                variant="determinate"
+                value={stabPct}
+                color={cooldown.stabilization_active ? 'error' : 'success'}
+              />
+            </CardContent>
+          </Card>
+        </Grid>
+      )}
       <Grid size={{ xs: 12, sm: 6 }}>
         <Card variant="outlined">
           <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>

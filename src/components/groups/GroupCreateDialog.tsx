@@ -57,6 +57,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
   const [scaleUpCooldown, setScaleUpCooldown] = useState(300);
   const [scaleDownCooldown, setScaleDownCooldown] = useState(600);
   const [stabilizationSeconds, setStabilizationSeconds] = useState(0);
+  const [scaleRequestTimeout, setScaleRequestTimeout] = useState(600);
 
   // Readiness
   const [readinessWait, setReadinessWait] = useState(90);
@@ -147,7 +148,7 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
         };
       }
 
-      data.cooldowns = { scale_up_seconds: scaleUpCooldown, scale_down_seconds: scaleDownCooldown, stabilization_seconds: stabilizationSeconds };
+      data.cooldowns = { scale_up_seconds: scaleUpCooldown, scale_down_seconds: scaleDownCooldown, stabilization_seconds: stabilizationSeconds, scale_request_timeout_seconds: scaleRequestTimeout };
       data.reconciliation = { enabled: true, interval_seconds: 60, auto_replace: autoReplace };
       data.readiness = {
         initial_wait_seconds: readinessWait,
@@ -453,6 +454,17 @@ export default function GroupCreateDialog({ open, onClose, onCreated }: Props) {
                   onChange={(e) => setStabilizationSeconds(Number(e.target.value))}
                   size="small"
                   helperText="Global lock after any event"
+                />
+              </Grid>
+              <Grid size={{ xs: 6, sm: 3 }}>
+                <TextField
+                  fullWidth
+                  label="Request Timeout (s)"
+                  type="number"
+                  value={scaleRequestTimeout}
+                  onChange={(e) => setScaleRequestTimeout(Number(e.target.value))}
+                  size="small"
+                  helperText="Stale request expiry"
                 />
               </Grid>
               <Grid size={{ xs: 6, sm: 3 }}>

@@ -35,9 +35,10 @@ type BootConfig struct {
 }
 
 type CooldownConfig struct {
-	ScaleUpSeconds       int `json:"scale_up_seconds"`
-	ScaleDownSeconds     int `json:"scale_down_seconds"`
-	StabilizationSeconds int `json:"stabilization_seconds"`
+	ScaleUpSeconds             int `json:"scale_up_seconds"`
+	ScaleDownSeconds           int `json:"scale_down_seconds"`
+	StabilizationSeconds       int `json:"stabilization_seconds"`
+	ScaleRequestTimeoutSeconds int `json:"scale_request_timeout_seconds"`
 }
 
 func ParseNetworkConfig(jsonStr string) (*NetworkConfig, error) {
@@ -65,7 +66,7 @@ func ParseBootConfig(jsonStr string) (*BootConfig, error) {
 }
 
 func ParseCooldownConfig(jsonStr string) (*CooldownConfig, error) {
-	cfg := &CooldownConfig{ScaleUpSeconds: 300, ScaleDownSeconds: 600}
+	cfg := &CooldownConfig{ScaleUpSeconds: 300, ScaleDownSeconds: 600, ScaleRequestTimeoutSeconds: 600}
 	if jsonStr == "" {
 		return cfg, nil
 	}

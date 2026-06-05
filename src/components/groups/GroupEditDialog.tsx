@@ -98,6 +98,7 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
   const [scaleUpCooldown, setScaleUpCooldown] = useState(group.cooldown_config?.scale_up_seconds ?? 300);
   const [scaleDownCooldown, setScaleDownCooldown] = useState(group.cooldown_config?.scale_down_seconds ?? 600);
   const [stabilizationSeconds, setStabilizationSeconds] = useState(group.cooldown_config?.stabilization_seconds ?? 0);
+  const [scaleRequestTimeout, setScaleRequestTimeout] = useState(group.cooldown_config?.scale_request_timeout_seconds ?? 600);
 
   // Reconciliation
   const [reconcileEnabled, setReconcileEnabled] = useState(group.reconciliation_config?.enabled ?? true);
@@ -172,7 +173,7 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
         max_instances: maxInstances !== group.max_instances ? maxInstances : undefined,
         desired_count: desiredCount !== group.desired_count ? desiredCount : undefined,
         max_scale_step: maxScaleStep !== group.max_scale_step ? maxScaleStep : undefined,
-        cooldowns: { scale_up_seconds: scaleUpCooldown, scale_down_seconds: scaleDownCooldown, stabilization_seconds: stabilizationSeconds },
+        cooldowns: { scale_up_seconds: scaleUpCooldown, scale_down_seconds: scaleDownCooldown, stabilization_seconds: stabilizationSeconds, scale_request_timeout_seconds: scaleRequestTimeout },
         reconciliation: { enabled: reconcileEnabled, interval_seconds: reconcileInterval, auto_replace: autoReplace },
         alerting: {
           enabled: alertingEnabled,
@@ -699,6 +700,17 @@ export default function GroupEditDialog({ open, group, onClose, onUpdated }: Pro
                   onChange={(e) => setStabilizationSeconds(Number(e.target.value))}
                   size="small"
                   helperText="Blocks all scaling (up and down) after any scale event. Set to 0 to disable."
+                />
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <TextField
+                  fullWidth
+                  label="Scale Request Timeout (s)"
+                  type="number"
+                  value={scaleRequestTimeout}
+                  onChange={(e) => setScaleRequestTimeout(Number(e.target.value))}
+                  size="small"
+                  helperText="Stale requests older than this are marked timed_out. Default 600s."
                 />
               </Grid>
             </Grid>

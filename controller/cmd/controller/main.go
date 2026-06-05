@@ -45,6 +45,35 @@ func main() {
 	mp := metricpoller.NewPoller(db, log)
 	mp.Start()
 
+	// Start stale scale request cleanup loop
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			groups, err := listEnabledGroups(db)
+			if err != nil {
+				log.Errorw("cleanup: failed to list groups", "error", err)
+				continue
+			}
+			for _, g := range groups {
+				cooldownCfg, _ := scaler.ParseCooldownConfig(g.CooldownConfigJSON.String)
+				timeout := cooldownCfg.ScaleRequestTimeoutSeconds
+				if timeout <= 0 {
+					timeout = 600
+				}
+				expired, err := dbpkg.ExpireStaleScaleRequests(db, g.GroupID, timeout)
+				if err != nil {
+					log.Errorw("cleanup: failed to expire stale requests", "group_id", g.GroupID, "error", err)
+					continue
+				}
+				if expired > 0 {
+					log.Warnw("cleanup: expired stale scale requests",
+						"group_id", g.GroupID, "count", expired, "timeout_seconds", timeout)
+				}
+			}
+		}
+	}()
+
 	// Start metrics server
 	go func() {
 		mux := http.NewServeMux()

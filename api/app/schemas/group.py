@@ -59,6 +59,7 @@ class CooldownConfig(BaseModel):
     scale_up_seconds: int = 300
     scale_down_seconds: int = 600
     stabilization_seconds: int = 0
+    scale_request_timeout_seconds: int = 600
 
 
 class ReconciliationConfig(BaseModel):

@@ -80,6 +80,7 @@ export interface CooldownConfig {
   scale_up_seconds: number;
   scale_down_seconds: number;
   stabilization_seconds: number;
+  scale_request_timeout_seconds: number;
 }
 
 export interface ReconciliationConfig {

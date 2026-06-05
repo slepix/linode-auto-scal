@@ -366,6 +366,20 @@ func CountCreatingInstances(db *sql.DB, groupID string) (int, error) {
 	return count, err
 }
 
+func ExpireStaleScaleRequests(db *sql.DB, groupID string, timeoutSeconds int) (int64, error) {
+	cutoff := time.Now().UTC().Add(-time.Duration(timeoutSeconds) * time.Second)
+	result, err := db.Exec(
+		`UPDATE scale_requests SET status = 'timed_out', updated_at = NOW(), completed_at = NOW()
+		 WHERE group_id = $1 AND status IN ('queued', 'running') AND dry_run = 'false'
+		 AND created_at < $2`,
+		groupID, cutoff,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 func GetPendingImports(db *sql.DB, groupID string) ([]Instance, error) {
 	rows, err := db.Query(`
 		SELECT id, group_id, linode_id, linode_label, region, type, image,

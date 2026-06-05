@@ -163,6 +163,21 @@ func (p *Poller) pollGroup(groupID string, configJSON sql.NullString) {
 
 func (p *Poller) evaluate(groupID string, cfg *MetricScalingConfig, avg float64) {
 	if avg >= cfg.Rule.ScaleUpThreshold {
+		group, err := dbpkg.GetGroupByGroupID(p.db, groupID)
+		if err != nil {
+			return
+		}
+		active, _ := dbpkg.CountActiveInstances(p.db, groupID)
+		creating, _ := dbpkg.CountCreatingInstances(p.db, groupID)
+		current := active + creating
+
+		if current >= group.MaxInstances {
+			p.emitEvent(groupID, "metric_scale_capped", "info",
+				fmt.Sprintf("Metric avg %.2f >= threshold %.2f, but already at max instances (%d/%d)",
+					avg, cfg.Rule.ScaleUpThreshold, current, group.MaxInstances))
+			return
+		}
+
 		pending, _ := dbpkg.HasPendingScaleUp(p.db, groupID)
 		if pending {
 			return
@@ -174,6 +189,16 @@ func (p *Poller) evaluate(groupID string, cfg *MetricScalingConfig, avg float64)
 			fmt.Sprintf("Metric avg %.2f >= threshold %.2f", avg, cfg.Rule.ScaleUpThreshold))
 
 	} else if avg <= cfg.Rule.ScaleDownThreshold {
+		group, err := dbpkg.GetGroupByGroupID(p.db, groupID)
+		if err != nil {
+			return
+		}
+		active, _ := dbpkg.CountActiveInstances(p.db, groupID)
+
+		if active <= group.MinInstances {
+			return
+		}
+
 		pending, _ := dbpkg.HasPendingScaleDown(p.db, groupID)
 		if pending {
 			return
